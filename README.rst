@@ -91,6 +91,7 @@ Todo
 ----
 
 * Relational models links
+* Delete data in database when models is deleted (synchronize with makemigration and migrate)
 
 
 Contributing
