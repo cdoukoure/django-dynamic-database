@@ -4,6 +4,7 @@ setup(
     name='django-pivot-models',
     version='0.1.0',
     description='Create dynamic physical database with pivot table concept',
+    long_description=read('README.rst'),
     url='https://github.com/cdoukoure/django-pivot-models',
     download_url='https://github.com/cdoukoure/django-pivot-models/archive/master.zip',
     author='Jean-Charles DOUKOURE',
@@ -18,5 +19,5 @@ setup(
         'Programming Language :: Python :: 3.6'
     ],
     packages=find_packages(),
-    install_requires=['django>=1.10']
+    install_requires=['django>=1.10', 'django-pivot>=1.6.1']
 )
