@@ -1,93 +1,211 @@
-===========
-django-mptt
-===========
+.. image:: https://img.shields.io/travis/django-polymorphic/django-polymorphic-tree/master.svg?branch=master
+    :target: http://travis-ci.org/django-polymorphic/django-polymorphic-tree
+.. image:: https://img.shields.io/pypi/v/django-polymorphic-tree.svg
+    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
+.. image:: https://img.shields.io/badge/wheel-yes-green.svg
+    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
+.. image:: https://img.shields.io/pypi/l/django-polymorphic-tree.svg
+    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
+.. image:: https://img.shields.io/codecov/c/github/django-polymorphic/django-polymorphic-tree/master.svg
+    :target: https://codecov.io/github/django-polymorphic/django-polymorphic-tree?branch=master
 
-Utilities for implementing Modified Preorder Tree Traversal with your
-Django Models and working with trees of Model instances.
+django-pivot-models
+=======================
 
-.. image:: https://secure.travis-ci.org/django-mptt/django-mptt.svg?branch=master
-    :alt: Build Status
-    :target: https://travis-ci.org/django-mptt/django-mptt
+This package use django-pivot.
+You can write several Django models handling on 4 tables in your database.
 
-Project home: https://github.com/django-mptt/django-mptt/
+Installation
+============
 
-Documentation: https://django-mptt.readthedocs.io/
+First install the module, preferably in a virtual environment::
 
-Discussion group: https://groups.google.com/forum/#!forum/django-mptt-dev
+    pip install django-pivot-models
 
-What is Modified Preorder Tree Traversal?
-=========================================
+Or install the current repository::
 
-MPTT is a technique for storing hierarchical data in a database. The aim is to
-make retrieval operations very efficient.
+    pip install -e git+https://github.com/django-polymorphic/django-polymorphic-tree.git#egg=django-pivot-models
 
-The trade-off for this efficiency is that performing inserts and moving
-items around the tree is more involved, as there's some extra work
-required to keep the tree structure in a good state at all times.
+The main dependencies are django-pivot,
+which will be automatically installed.
 
-Here are a few articles about MPTT to whet your appetite and provide
-details about how the technique itself works:
+Configuration
+-------------
 
-* `Trees in SQL`_
-* `Storing Hierarchical Data in a Database`_
-* `Managing Hierarchical Data in MySQL`_
+Next, create a project which uses the application::
 
-.. _`Trees in SQL`: https://www.ibase.ru/files/articles/programming/dbmstrees/sqltrees.html
-.. _`Storing Hierarchical Data in a Database`: https://www.sitepoint.com/hierarchical-data-database/
-.. _`Managing Hierarchical Data in MySQL`: http://mikehillyer.com/articles/managing-hierarchical-data-in-mysql/
+    cd ..
+    django-admin.py startproject demo
 
-What is ``django-mptt``?
-========================
+Add the following to ``settings.py``:
 
-``django-mptt`` is a reusable Django app which aims to make it easy for you
-to use MPTT with your own Django models.
+.. code:: python
 
-It takes care of the details of managing a database table as a tree
-structure and provides tools for working with trees of model instances.
+    INSTALLED_APPS += (
+        'django_pivot_models',
+    )
 
-Requirements
+And then
+
+.. code:: python
+
+    from django_pivot_models.models import PivotModel
+
+Usage
+-----
+
+The main feature of this module is creating a tree of custom node types.
+It boils down to creating a application with 2 files:
+
+The ``models.py`` file should define the custom node type, and any fields it has:
+
+.. code:: python
+
+    from django.db import models
+    from django.utils.translation import ugettext_lazy as _
+    from polymorphic_tree.models import PolymorphicMPTTModel, PolymorphicTreeForeignKey
+
+
+    # A base model for the tree:
+
+    class BaseTreeNode(PolymorphicMPTTModel):
+        parent = PolymorphicTreeForeignKey('self', blank=True, null=True, related_name='children', verbose_name=_('parent'))
+        title = models.CharField(_("Title"), max_length=200)
+
+        class Meta(PolymorphicMPTTModel.Meta):
+            verbose_name = _("Tree node")
+            verbose_name_plural = _("Tree nodes")
+
+
+    # Create 3 derived models for the tree nodes:
+
+    class CategoryNode(BaseTreeNode):
+        opening_title = models.CharField(_("Opening title"), max_length=200)
+        opening_image = models.ImageField(_("Opening image"), upload_to='images')
+
+        class Meta:
+            verbose_name = _("Category node")
+            verbose_name_plural = _("Category nodes")
+
+
+    class TextNode(BaseTreeNode):
+        extra_text = models.TextField()
+
+        # Extra settings:
+        can_have_children = False
+
+        class Meta:
+            verbose_name = _("Text node")
+            verbose_name_plural = _("Text nodes")
+
+
+    class ImageNode(BaseTreeNode):
+        image = models.ImageField(_("Image"), upload_to='images')
+
+        class Meta:
+            verbose_name = _("Image node")
+            verbose_name_plural = _("Image nodes")
+
+
+The ``admin.py`` file should define the admin, both for the child nodes and parent:
+
+.. code:: python
+
+    from django.contrib import admin
+    from django.utils.translation import ugettext_lazy as _
+    from polymorphic_tree.admin import PolymorphicMPTTParentModelAdmin, PolymorphicMPTTChildModelAdmin
+    from . import models
+
+
+    # The common admin functionality for all derived models:
+
+    class BaseChildAdmin(PolymorphicMPTTChildModelAdmin):
+        GENERAL_FIELDSET = (None, {
+            'fields': ('parent', 'title'),
+        })
+
+        base_model = models.BaseTreeNode
+        base_fieldsets = (
+            GENERAL_FIELDSET,
+        )
+
+
+    # Optionally some custom admin code
+
+    class TextNodeAdmin(BaseChildAdmin):
+        pass
+
+
+    # Create the parent admin that combines it all:
+
+    class TreeNodeParentAdmin(PolymorphicMPTTParentModelAdmin):
+        base_model = models.BaseTreeNode
+        child_models = (
+            (models.CategoryNode, BaseChildAdmin),
+            (models.TextNode, TextNodeAdmin),  # custom admin allows custom edit/delete view.
+            (models.ImageNode, BaseChildAdmin),
+        )
+
+        list_display = ('title', 'actions_column',)
+
+        class Media:
+            css = {
+                'all': ('admin/treenode/admin.css',)
+            }
+
+
+    admin.site.register(models.BaseTreeNode, TreeNodeParentAdmin)
+
+
+The ``child_models`` attribute defines which admin interface is loaded for the *edit* and *delete* page.
+The list view is still rendered by the parent admin.
+
+
+Tests
+-----
+
+To run the included test suite, execute::
+
+    ./runtests.py
+
+To test support for multiple Python and Django versions, you need to follow steps below:
+
+* install project requirements in virtual environment
+* install python 2.7, 3.4, 3.5, 3.6 python versions through pyenv (See pyenv (Linux) or Homebrew (Mac OS X).)
+* create .python-version file and add full list of installed versions with which project have to be tested, example::
+
+    2.6.9
+    2.7.13
+    3.4.5
+    3.5.2
+    3.6.0
+* run tox from the repository root::
+
+    pip install tox
+    tox
+
+Python 2.7, 3.4, 3.5 and 3.6 and django 1.8, 1.10 and 1.11 are the currently supported versions.
+
+Todo
+----
+
+* Sphinx Documentation
+
+
+Contributing
 ------------
 
-* Python 2.7 or 3.4+
-* A supported version of Django (currently 1.11+)
+This module is designed to be generic. In case there is anything you didn't like about it,
+or think it's not flexible enough, please let us know. We'd love to improve it!
 
-Feature overview
-----------------
+If you have any other valuable contribution, suggestion or idea,
+please let us know as well because we will look into it.
+Pull requests are welcome too. :-)
 
-* Simple registration of models - fields required for tree structure will be
-  added automatically.
 
-* The tree structure is automatically updated when you create or delete
-  model instances, or change an instance's parent.
+.. _Leukeleu: http://www.leukeleu.nl/
+.. _django-fiber: https://github.com/ridethepony/django-fiber
+.. _django-fluent-pages: https://github.com/edoburu/django-fluent-pages
+.. _django-mptt: https://github.com/django-mptt/django-mptt
+.. _django-polymorphic: https://github.com/django-polymorphic/django-polymorphic
 
-* Each level of the tree is automatically sorted by a field (or fields) of your
-  choice.
-
-* New model methods are added to each registered model for:
-
-  * changing position in the tree
-  * retrieving ancestors, siblings, descendants
-  * counting descendants
-  * other tree-related operations
-
-* A ``TreeManager`` manager is added to all registered models. This provides
-  methods to:
-
-  * move nodes around a tree, or into a different tree
-  * insert a node anywhere in a tree
-  * rebuild the MPTT fields for the tree (useful when you do bulk updates
-    outside of django)
-
-* `Form fields`_ for tree models.
-
-* `Utility functions`_ for tree models.
-
-* `Template tags and filters`_ for rendering trees.
-
-* `Admin classes`_ for visualizing and modifying trees in Django's administration
-  interface.
-
-.. _`Form fields`: https://django-mptt.readthedocs.io/en/latest/forms.html
-.. _`Utility functions`: https://django-mptt.readthedocs.io/en/latest/utilities.html
-.. _`Template tags and filters`: https://django-mptt.readthedocs.io/en/latest/templates.html
-.. _`Admin classes`: https://django-mptt.readthedocs.io/en/latest/admin.html
