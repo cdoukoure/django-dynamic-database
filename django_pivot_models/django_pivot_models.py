@@ -20,10 +20,26 @@ class PivotModelQuerySet(models.QuerySet):
         ids = []
         # Get cell primary_key__id from cells matching kwargs
         for key, val in kwargs.iteritems():
-            ids = ids + [cell.primary_key__id for cell in Cell.filter(value_type__name=key, value=val)]
+            if key in ['pk', 'id']:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__id=val)]
+            else:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(value_type__name=key, value=val)]
         # remove duplicate id
         ids = list(set(ids))
-        # Generate desired value from pivot
+        # Generate desired result from pivot
+        return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')[0]
+
+    def filter(self, **kwargs):
+        ids = []
+        # Get cell primary_key__id from cells matching kwargs
+        for key, val in kwargs.iteritems():
+            if key in ['pk', 'id']:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__id=val)]
+            else:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(value_type__name=key, value=val)]
+        # remove duplicate id
+        ids = list(set(ids))
+        # Generate desired result from pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
 
     def smaller_than(self, size):

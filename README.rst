@@ -92,6 +92,7 @@ Todo
 
 * Relational models links (objects prefetch_related, select_related)
 * Delete data in database when models is deleted (synchronize with makemigration and migrate)
+* Complex queries with Q and F objects
 
 
 Contributing
