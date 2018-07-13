@@ -90,7 +90,7 @@ Tests
 Todo
 ----
 
-* Relational models links
+* Relational models links (objects prefetch_related, select_related)
 * Delete data in database when models is deleted (synchronize with makemigration and migrate)
 
 
