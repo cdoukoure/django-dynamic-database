@@ -29,6 +29,8 @@ class PivotModelQuerySet(models.QuerySet):
         # Generate desired result from pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')[0]
 
+    # Get instance class name => primary_key__table__name = type(self).__name__
+
     def filter(self, **kwargs):
         ids = []
         # Get cell primary_key__id from cells matching kwargs
@@ -42,8 +44,8 @@ class PivotModelQuerySet(models.QuerySet):
         # Generate desired result from pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
 
-    def smaller_than(self, size):
-        return self.filter(size__lt=size)
+    def all(self, size):
+        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
 
 # pivot_table = pivot(ShirtSales.objects.filter(style='Golf'), 'region', 'shipped', 'units')
 class DocumentManager(models.Manager):
