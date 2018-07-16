@@ -9,7 +9,7 @@
 .. image:: https://img.shields.io/codecov/c/github/django-polymorphic/django-polymorphic-tree/master.svg
     :target: https://codecov.io/github/django-polymorphic/django-polymorphic-tree?branch=master
 
-django-pivot-models
+django-dynamic-database
 =======================
 
 This package use django-pivot.
@@ -20,11 +20,11 @@ Installation
 
 First install the module, preferably in a virtual environment::
 
-    pip install django-pivot-models
+    pip install django-dynamic-database
 
 Or install the current repository::
 
-    pip install -e git+https://github.com/django-polymorphic/django-polymorphic-tree.git#egg=django-pivot-models
+    pip install -e git+https://github.com/django-polymorphic/django-polymorphic-tree.git#egg=django-dynamic-database
 
 The main dependencies are django-pivot,
 which will be automatically installed.
@@ -43,14 +43,14 @@ Add the following to ``settings.py``:
 
     INSTALLED_APPS += (
         'django_pivot',
-        'django_pivot_models',
+        'django_dynamic_database',
     )
 
 And then
 
 .. code:: python
 
-    from django_pivot_models.models import PivotModel
+    from django_dynamic_database.models import PivotModel
 
 Usage
 -----
@@ -62,16 +62,16 @@ The ``models.py`` file should define the custom model type, and any fields it ha
 
 .. code:: python
 
-    from django_pivot_models.models import PivotModel, PivotCharField, PivotForeignKey
+    from django_dynamic_database.models import DynamicDBModel, DynamicDBCharField, DynamicDBForeignKey
 
 
-    class Course(PivotModel):
-        title = PivotCharField(_("Title"), max_length=200)
+    class Course(DynamicDBModel):
+        title = DynamicDBCharField(_("Title"), max_length=200)
 
 
-    class Session(BaseTreeNode):
-        course = PivotForeignKey(_("Opening title"), max_length=200)
-        title = PivotCharField(_("Title"), max_length=200)
+    class Session(DynamicDBModel):
+        course = DynamicDBForeignKey(_("Opening title"), max_length=200)
+        title = DynamicDBCharField(_("Title"), max_length=200)
 
 
 The ``admin.py`` file should define the admin, both for the child nodes and parent:
@@ -80,7 +80,7 @@ The ``admin.py`` file should define the admin, both for the child nodes and pare
 
     from django.contrib import admin
     from django.utils.translation import ugettext_lazy as _
-    from django_pivot_models.admin import PivotModelAdmin, PivotChildModelAdmin
+    from django_dynamic_database.admin import DynamicDBModelAdmin, DynamicDBModelAdmin
 
 
 Tests
@@ -93,6 +93,7 @@ Todo
 * Relational models links (objects prefetch_related, select_related)
 * Delete data in database when models is deleted (synchronize with makemigration and migrate)
 * Complex queries with Q and F objects
+* Complex filter with __icontains, __exact, __lt, __gt, __startswith
 
 
 Contributing

@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='django-pivot-models',
+    name='django-dynamic-database',
     version='0.1.0',
     description='Create dynamic physical database with pivot table concept',
     long_description=read('README.rst'),
