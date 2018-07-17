@@ -54,12 +54,10 @@ class DynamiDBModelQuerySet(models.QuerySet):
     def aggregate(self, *args, **kwargs):
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
 
-    """
-    def values_list(self, size):
-        # Get instance class name => primary_key__table__name = type(self).__name__
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
-    """
-    
+    # Simple values_list. Don't support bultin function eg. Entry.objects.values_list('id', Lower('headline'))
+    def values_list(self, *fields, flat=False, named=False):
+        return pivot(Cell.filter(primary_key__table__name=type(self).__name__, value_type__name__in=fields), 'value_type__name', 'primary_key__id', 'value')
+
     def create(self, defaults=None, **kwargs):
 
         objs = []
@@ -72,11 +70,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 for attr, val in self.__dict__.iteritems():
                     col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
                     objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
-        """
-        objs = [
-            Cell(primary_key=row, value_type=Column.objects.get(table=table_obj, name=attr), value=val) for attr, val in self.__dict__.iteritems()
-        ]
-        """
+
         List_of_objects = Cell.objects.bulk_create(objs)
         
         return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
