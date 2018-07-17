@@ -50,7 +50,20 @@ class DynamiDBModelQuerySet(models.QuerySet):
 
     # def __iter__(self):
     #     return super(PivotModelQuerySet,self).__iter__()
-    
+
+    # var is a Function => callable(var) , ou if isinstance(filter_obj, Q):
+    # Get function arg name => func.__code__.co_varnames
+
+    # Get function arg value
+    # import inspect
+    # def func(a, b, c):
+    #    frame = inspect.currentframe()
+    #    args, _, _, values = inspect.getargvalues(frame)
+    #    print 'function name "%s"' % inspect.getframeinfo(frame)[2]
+    #    for i in args:
+    #        print "    %s = %s" % (i, values[i])
+    #   return [(i, values[i]) for i in args]
+
     def aggregate(self, *args, **kwargs):
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
 
@@ -75,6 +88,72 @@ class DynamiDBModelQuerySet(models.QuerySet):
         
         return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
 
+    def bulk_create(self, objs, batch_size=None):
+        return objs
+
+    def get_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, creating one if necessary.
+        Return a tuple of (object, created), where created is a boolean
+        specifying whether an object was created.
+        ""
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        # The get() needs to be targeted at the write database in order
+        # to avoid potential transaction consistency problems.
+        self._for_write = True
+        try:
+            return self.get(**lookup), False
+        except self.model.DoesNotExist:
+            return self._create_object_from_params(lookup, params)
+        """
+        pass
+    
+    def update_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, updating one with defaults
+        if it exists, otherwise create a new one.
+        Return a tuple (object, created), where created is a boolean
+        specifying whether an object was created.
+        ""
+        defaults = defaults or {}
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        self._for_write = True
+        with transaction.atomic(using=self.db):
+            try:
+                obj = self.select_for_update().get(**lookup)
+            except self.model.DoesNotExist:
+                obj, created = self._create_object_from_params(lookup, params)
+                if created:
+                    return obj, created
+            for k, v in defaults.items():
+                setattr(obj, k, v() if callable(v) else v)
+            obj.save(using=self.db)
+        return obj, False
+        """
+        pass
+
+    def earliest(self, *fields, field_name=None):
+        # return self._earliest_or_latest(*fields, field_name=field_name)
+        pass
+    
+    def latest(self, *fields, field_name=None):
+        # return self.reverse()._earliest_or_latest(*fields, field_name=field_name)
+        pass
+    
+    def first(self):
+        """Return the first object of a query or None if no match is found.""
+        for obj in (self if self.ordered else self.order_by('pk'))[:1]:
+            return obj
+        """
+        pass
+    
+    def last(self):
+        """Return the last object of a query or None if no match is found.""
+        for obj in (self.reverse() if self.ordered else self.order_by('-pk'))[:1]:
+            return obj
+        """
+        pass
+    
     # def update(self, **kwargs):
     #     self.add_tenant_filters_without_joins()
     #     #print(self.query.alias_refcount)
