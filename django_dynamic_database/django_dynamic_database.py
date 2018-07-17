@@ -13,18 +13,14 @@ import pdb
 _thread_locals = local()
 
 
-class PivotModelQuerySet(models.QuerySet):
+class DynamiDBModelQuerySet(models.QuerySet):
     def count(self):
         return self.rows.count()
 
     def all(self, size):
         # Get instance class name => primary_key__table__name = type(self).__name__
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
-
-    def values_list(self, size):
-        # Get instance class name => primary_key__table__name = type(self).__name__
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
-
+    
     def get(self, **kwargs):
         ids = []
         # Get cell primary_key__id from cells matching kwargs
@@ -35,7 +31,7 @@ class PivotModelQuerySet(models.QuerySet):
                 ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table__name=type(self).__name__, value_type__name=key, value=val)]
         # remove duplicate id
         ids = list(set(ids))
-        # Generate desired result from pivot
+        # Generate desired result with pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')[0]
 
     # Simple filter. Don't support complex query with Q and F
@@ -49,7 +45,7 @@ class PivotModelQuerySet(models.QuerySet):
                 ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table__name=type(self).__name__, value_type__name=key, value=val)]
         # remove duplicate id
         ids = list(set(ids))
-        # Generate desired result from pivot
+        # Generate desired result with pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
 
     # def __iter__(self):
@@ -58,23 +54,32 @@ class PivotModelQuerySet(models.QuerySet):
     def aggregate(self, *args, **kwargs):
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
 
-    def get_or_create(self, defaults=None, **kwargs):
     """
-    primary_key = models.ForeignKey('Row', on_delete=models.CASCADE)
-    value_type = models.ForeignKey('Column', on_delete=models.CASCADE)
-    value = models.CharField(max_length=500)
+    def values_list(self, size):
+        # Get instance class name => primary_key__table__name = type(self).__name__
+        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
     """
-        table_obj, created = Table.objects.get_or_create(name=type(self).__name__)
+    
+    def create(self, defaults=None, **kwargs):
+
+        objs = []
         
-        if created:
-            row = Row.objects.create(table=table_obj)
-        else:
-            super(TenantQuerySet,self).get_or_create(defaults,**kwargs)
+        table_obj, table_created = Table.objects.get_or_create(name=type(self).__name__)
         
-        for attr, val in self.__dict__.iteritems():
-            col = Column.objects.get(table=table_obj, name=attr)
-            Cell.objects.create(primary_key=row, value_type=col, value=val)
-        return super(TenantQuerySet,self).get_or_create(defaults,**kwargs)
+        if table_obj:
+            row_obj, row_created = Row.objects.get_or_create(table=table_obj)
+            if row_obj:
+                for attr, val in self.__dict__.iteritems():
+                    col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
+        """
+        objs = [
+            Cell(primary_key=row, value_type=Column.objects.get(table=table_obj, name=attr), value=val) for attr, val in self.__dict__.iteritems()
+        ]
+        """
+        List_of_objects = Cell.objects.bulk_create(objs)
+        
+        return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
 
     # def update(self, **kwargs):
     #     self.add_tenant_filters_without_joins()
@@ -88,13 +93,12 @@ class PivotModelQuerySet(models.QuerySet):
     
     #This API is called when there is a subquery. Injected tenant_ids for the subqueries.
     def _as_sql(self, connection):
-        self.add_tenant_filters_with_joins()
-        return super(TenantQuerySet,self)._as_sql(connection)
+        return super(DynamiDBModelQuerySet,self)._as_sql(connection)
 
 # pivot_table = pivot(ShirtSales.objects.filter(style='Golf'), 'region', 'shipped', 'units')
-class DocumentManager(models.Manager):
+class DynamiDBModelManager(models.Manager):
     def get_queryset(self):
-        return DocumentQuerySet(self.model, using=self._db)  # Important!
+        return DynamiDBModelQuerySet(self.model, using=self._db)  # Important!
 
     def pdfs(self):
         return self.get_queryset().pdfs()
