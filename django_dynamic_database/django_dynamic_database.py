@@ -1,3 +1,4 @@
+from django.core import exceptions
 from django.apps import apps
 from django.db import models
 from django.db.models import Avg, Q, F
@@ -21,18 +22,63 @@ class DynamiDBModelQuerySet(models.QuerySet):
         # Get instance class name => primary_key__table__name = type(self).__name__
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
     
+    def get(self, *args, **kwargs):
+        """
+        Perform the query and return a single object matching the given
+        keyword arguments.
+        """
+        clone = self.filter(*args, **kwargs)
+        if self.query.can_filter() and not self.query.distinct_fields:
+            clone = clone.order_by()
+        num = len(clone)
+        if num == 1:
+            return clone._result_cache[0]
+        if not num:
+            raise self.model.DoesNotExist(
+                "%s matching query does not exist." %
+                self.model._meta.object_name
+            )
+        raise self.model.MultipleObjectsReturned(
+            "get() returned more than one %s -- it returned %s!" %
+            (self.model._meta.object_name, num)
+        )
+
     def get(self, **kwargs):
         ids = []
+        table = Table.objects.get(name=type(self).__name__)
+        cols_name = [col.name for col in Column.filter(table=table)]
+        if len(kwargs) > len(cols_name):
+            raise ValueError("Params are match more than this table defined comlumns.")
+        
         # Get cell primary_key__id from cells matching kwargs
         for key, val in kwargs.iteritems():
             if key in ['pk', 'id']:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table__name=type(self).__name__, primary_key__id=val)]
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, primary_key__id=val)]
+            elif key in cols_name:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, value_type__name=key, value=val)]
             else:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table__name=type(self).__name__, value_type__name=key, value=val)]
+                raise exceptions.FieldError(
+                    "Invalid field name(s) for model %s: '%s'." %
+                    (type(self).__name__, key)
+                )
+                
         # remove duplicate id
         ids = list(set(ids))
         # Generate desired result with pivot
-        return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')[0]
+        res = pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
+        num = len(res)
+        if num == 1:
+            return res[0]
+        if not num:
+            raise self.model.DoesNotExist(
+                "%s matching query does not exist." %
+                type(self).__name__
+            )
+        raise self.model.MultipleObjectsReturned(
+            "get() returned more than one %s -- it returned %s!" %
+            (type(self).__name__, num)
+        )
+
 
     # Simple filter. Don't support complex query with Q and F
     def filter(self, **kwargs):
@@ -73,13 +119,15 @@ class DynamiDBModelQuerySet(models.QuerySet):
 
     def create(self, defaults=None, **kwargs):
 
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        
         objs = []
         
         table_obj, table_created = Table.objects.get_or_create(name=type(self).__name__)
         
         if table_obj:
             row_obj, row_created = Row.objects.get_or_create(table=table_obj)
-            if row_obj:
+            if row_created:
                 for attr, val in self.__dict__.iteritems():
                     col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
                     objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
