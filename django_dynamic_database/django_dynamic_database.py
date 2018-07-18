@@ -113,20 +113,16 @@ class DynamiDBModelQuerySet(models.QuerySet):
         try:
             params = {k: v() if callable(v) else v for k, v in params.items()}
 
-            table_obj = Table.objects.get_or_create(name=type(self).__name__)
+            table_obj = Table.objects.get(name=type(self).__name__)
         
-            if table_obj:
-            
-            else:
-                row_obj = Row.objects.create(table=table_obj)
-                if row_obj:
-                    for attr, val in params:
-                        col_obj = Column.objects.get(table=table_obj, name=attr)
-                        objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
-
-                    List_of_objects = Cell.objects.bulk_create(objs)
+            row_obj = Row.objects.create(table=table_obj)
+            if row_obj:
+                for attr, val in params:
+                    col_obj = Column.objects.get(table=table_obj, name=attr)
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
+                List_of_objects = Cell.objects.bulk_create(objs)
         
-                    return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')[0], True
+                return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')[0], True
 
         except IntegrityError as e:
             try:
