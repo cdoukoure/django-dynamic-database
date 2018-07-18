@@ -113,18 +113,20 @@ class DynamiDBModelQuerySet(models.QuerySet):
         try:
             params = {k: v() if callable(v) else v for k, v in params.items()}
 
-            table_obj = Table.objects.get(name=type(self).__name__)
+            table_obj = Table.objects.get_or_create(name=type(self).__name__)
         
             if table_obj:
-                row_obj, row_created = Row.objects.get_or_create(table=table_obj)
-                if row_created:
-                    for attr, val in self.__dict__.iteritems():
-                        col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
+            
+            else:
+                row_obj = Row.objects.create(table=table_obj)
+                if row_obj:
+                    for attr, val in params:
+                        col_obj = Column.objects.get(table=table_obj, name=attr)
                         objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
 
-                        List_of_objects = Cell.objects.bulk_create(objs)
+                    List_of_objects = Cell.objects.bulk_create(objs)
         
-                        return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')[0], True
+                    return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')[0], True
 
         except IntegrityError as e:
             try:
@@ -139,11 +141,30 @@ class DynamiDBModelQuerySet(models.QuerySet):
         (for creating a model instance) based on given kwargs; for use by
         get_or_create() and update_or_create().
         """
-        table = Table.objects.get(name=type(self).__name__)
-        cols_name = [col.name for col in Column.filter(table=table)]
-
+        cols_name = []
         defaults = defaults or {}
         lookup = kwargs.copy()
+
+        table, created = Table.objects.get_or_create(name=type(self).__name__)
+
+        if created:
+            cols = []
+            """
+            cols = list(set(chain.from_iterable(
+                (field.name, field.attname) if hasattr(field, 'attname') else (field.name,)
+                for field in MyModel._meta.get_fields()
+                # For complete backwards compatibility, you may want to exclude
+                # GenericForeignKey from the results.
+                if not (field.many_to_one and field.related_model is None)
+            )))
+            """
+            for field in type(self)._meta.get_fields():
+                cols.append(Column(table=table, name=field.name, type=type(field).__name__))
+                cols_name.append(field.name)
+            Column.objects.bulk_create(cols)
+
+        else:
+            cols_name = [col.name for col in Column.filter(table=table)]
 
         for field in cols_name:
             if field in lookup:
@@ -313,6 +334,7 @@ class Column(models.Model):
     RADIO = 'radio'
     SELECT = 'select'
     DATE = 'date'
+    DATETIME = 'datetime'
     NUMBER = 'number'
     FIELD_TYPE_CHOICES = (
         (TEXT, 'Text'),
@@ -322,17 +344,21 @@ class Column(models.Model):
         (RADIO, 'Radio button (for many options with single choice. Up to 3 options)'),
         (SELECT, 'Radio button (for many options with single choice. More than 3 options)'),
         (DATE, 'Date (Calendar)'),
+        (DATETIME, 'Date and time (Calendar)'),
     )
     
+    """
     type = models.CharField(
         choices=FIELD_TYPE_CHOICES,
         default=TEXT,
         max_length=100
     )
-    name = models.CharField(max_length=30)
-    label = models.CharField(max_length=30)
-    options = models.TextField(blank=True, null=True)
-    nullable = models.BooleanField(default=True)
+    """
+    name = models.CharField(max_length=100)
+    type = models.CharField(max_length=100)
+    # label = models.CharField(max_length=30, blank=True, null=True)
+    # options = models.TextField(blank=True, null=True)
+    # nullable = models.BooleanField(default=True)
     
     table = models.ForeignKey(Table, on_delete=models.CASCADE, related_name='columns')
     
