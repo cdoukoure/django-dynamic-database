@@ -16,7 +16,21 @@ _thread_locals = local()
 
 class DynamiDBModelQuerySet(models.QuerySet):
     def count(self):
-        return self.rows.count()
+        """
+        Perform a SELECT COUNT() and return the number of records as an
+        integer.
+
+        If the QuerySet is already fully cached, return the length of the
+        cached results set to avoid multiple SELECT COUNT(*) calls.
+        """
+        if self._result_cache is not None:
+            return len(self._result_cache)
+
+        return self.query.get_count(using=self.db)
+
+    def count(self):
+        # return self.rows.count()
+        return Row.objects.filter(table__name=type(self).__name__).count()
 
     def all(self, size):
         # Get instance class name => primary_key__table__name = type(self).__name__
@@ -25,9 +39,9 @@ class DynamiDBModelQuerySet(models.QuerySet):
     def get(self, **kwargs):
         ids = []
         table = Table.objects.get(name=type(self).__name__)
-        cols_name = [col.name for col in Column.filter(table=table)]
+        cols_name = [col.name for col in Column.objects.filter(table=table)]
         if len(kwargs) > len(cols_name):
-            raise ValueError("Params are match more than this table defined comlumns.")
+            raise ValueError("Params are match more than this table defined columns.")
         
         # Get cell primary_key__id from cells matching kwargs
         for key, val in kwargs.iteritems():
@@ -82,6 +96,29 @@ class DynamiDBModelQuerySet(models.QuerySet):
         # Generate desired result with pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
 
+
+    def _attr_sort(self, attrs=['someAttributeString']:
+        '''helper to sort by the attributes named by strings of attrs in order'''
+        return lambda k: [ getattr(k, attr) for attr in attrs ]
+    # records.sort(key=self._attr_sort(attrs=[field_names]))
+
+    def order_by(self, *field_names):
+        """Return a new QuerySet instance with the ordering changed.""
+        assert self.query.can_filter(), \
+            "Cannot reorder a query once a slice has been taken."
+        obj = self._chain()
+        obj.query.clear_ordering(force_empty=False)
+        obj.query.add_ordering(*field_names)
+        return obj"""
+        # To sort the list in place...
+        ut.sort(key=lambda x: x.count, reverse=True)
+        
+        L.sort(key=lambda i: (i.whatever, i.someother, i.anotherkey))
+
+        # To return a new list, use the sorted() built-in function...
+        newlist = sorted(ut, key=lambda x: x.count, reverse=True)
+        pass
+
     # def __iter__(self):
     #     return super(PivotModelQuerySet,self).__iter__()
 
@@ -105,6 +142,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
     def values_list(self, *fields, flat=False, named=False):
         return pivot(Cell.filter(primary_key__table__name=type(self).__name__, value_type__name__in=fields), 'value_type__name', 'primary_key__id', 'value')
 
+    # OK
     def _create_object_from_params(self, lookup, params):
         """
         Try to create an object using passed params. Used by get_or_create()
@@ -131,6 +169,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 pass
             raise e
 
+    # OK
     def _extract_model_params(self, defaults, **kwargs):
         """
         Prepare `lookup` (kwargs that are valid model attributes), `params`
@@ -181,6 +220,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 ))
         return lookup, params
 
+    # OK
     def create(self, defaults=None, **kwargs):
         ids = []
         table = Table.objects.get(name=type(self).__name__)
@@ -203,7 +243,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
         
         return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
 
-
+    # OK
     def get_or_create(self, defaults=None, **kwargs):
         """
         Look up an object with the given kwargs, creating one if necessary.
@@ -216,6 +256,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
         except self.model.DoesNotExist:
             return self._create_object_from_params(lookup, params)
     
+    # OK
     def update_or_create(self, defaults=None, **kwargs):
         """
         Look up an object with the given kwargs, updating one with defaults
@@ -225,18 +266,17 @@ class DynamiDBModelQuerySet(models.QuerySet):
         """
         defaults = defaults or {}
         lookup, params = self._extract_model_params(defaults, **kwargs)
-        with transaction.atomic(using=self.db):
-            try:
-                #obj = self.select_for_update().get(**lookup)
-                obj = self.get(**lookup)
-            except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
-                obj, created = self._create_object_from_params(lookup, params)
-                if created:
-                    return obj, created
+        try:
+            #obj = self.select_for_update().get(**lookup)
+            obj = self.get(**lookup)
+        except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
+            obj, created = self._create_object_from_params(lookup, params)
+            if created:
+                return obj, created
 
-            for attr, val in defaults.items():
-                col_obj = Column.objects.get(table__name=type(self).__name__, name=attr)
-                Cell.objects.filter(primary_key__id=obj.primary_key__id, value_type=col_obj).update(value=val() if callable(val) else val)
+        for attr, val in defaults.items():
+            col_obj = Column.objects.get(table__name=type(self).__name__, name=attr)
+            Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id, value_type=col_obj).update(value=val() if callable(val) else val)
         
         return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id), 'value_type__name', 'primary_key__id', 'value'), False
 
