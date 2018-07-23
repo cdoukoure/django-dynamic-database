@@ -487,7 +487,20 @@ class DynamiDBModelQuerySet(models.QuerySet):
         return super(DynamiDBModelQuerySet,self)._as_sql(connection)
 
 class DynamiDBModelManager(models.Manager):
+    """
+    Generating custom initial queryset from pivoting datatable cell. 
+    OK With this SQL syntaxe
+
+    Trying to do this with Django ORM
     
+    SELECT row_id AS id,
+    (CASE WHEN column_name = 'xxx' THEN value END) AS column_name,
+    ...
+    AGGREGATION(CASE WHEN column_name = 'xxx' THEN value END) AS column_name,
+    FROM "Cell"
+    GROUP BY id;
+
+    """
     def get_queryset(self):
     
         # Generate models columns annotation
