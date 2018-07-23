@@ -1,7 +1,7 @@
 from django.core import exceptions
 from django.apps import apps
 from django.db import models
-from django.db.models import Avg, Q, F
+from django.db.models import Avg, Q, F, sql
 from django_pivot.pivot import pivot
 try:
     from threading import local
@@ -14,7 +14,104 @@ import pdb
 _thread_locals = local()
 
 
+
+"""
+SELECT row_id, 
+(CASE WHEN column_name = 'nom' THEN value END) AS nom,
+(CASE WHEN column_name = 'genre' THEN value END) AS genre,
+SUM(CASE WHEN column_name = 'age' THEN value END) AS age
+FROM "Cell" 
+GROUP BY row_id;
+
+SELECT COUNT(*) FROM 
+( SELECT row_id, 
+UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
+SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
+FROM "Cell" 
+GROUP BY row_id) ;
+
+SELECT AVG(AGE) FROM 
+( SELECT row_id, 
+UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
+SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
+FROM "Cell" 
+GROUP BY row_id) ;
+SELECT MAX(AGE) FROM 
+( SELECT row_id, 
+UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
+SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
+FROM "Cell" 
+GROUP BY row_id) ;
+
+SELECT * FROM "Cell" WHERE column_name = 'nom';
+
+"""
+
 class DynamiDBModelQuerySet(models.QuerySet):
+
+    def __init__(self):
+        models.QuerySet.__init__(self)
+    
+
+    ####################################
+    # METHODS THAT DO DATABASE QUERIES #
+    ####################################
+
+    def aggregate(self, *args, **kwargs):
+        """
+        Return a dictionary containing the calculations (aggregation)
+        over the current queryset.
+
+        If args is present the expression is passed as a kwarg using
+        the Aggregate object's default alias.
+        """
+        if self.query.distinct_fields:
+            raise NotImplementedError("aggregate() + distinct(fields) not implemented.")
+        self._validate_values_are_expressions(args + tuple(kwargs.values()), method_name='aggregate')
+        for arg in args:
+            # The default_alias property raises TypeError if default_alias
+            # can't be set automatically or AttributeError if it isn't an
+            # attribute.
+            try:
+                arg.default_alias
+            except (AttributeError, TypeError):
+                raise TypeError("Complex aggregates require an alias")
+            kwargs[arg.default_alias] = arg
+
+        query = self.query.chain()
+        for (alias, aggregate_expr) in kwargs.items():
+            query.add_annotation(aggregate_expr, alias, is_summary=True)
+            if not query.annotations[alias].contains_aggregate:
+                raise TypeError("%s is not an aggregate expression" % alias)
+        return query.get_aggregation(self.db, kwargs)
+    # NOK
+    def aggregate(self, *args, **kwargs):
+        # Avg(expression, output_field=FloatField(), filter=None, **extra)
+        # pivot_table = pivot(ShirtSales, 'region', 'shipped', F('units') * F('price'), Avg)
+        # Person.objects.raw('SELECT * FROM myapp_person')
+        # if isinstance(filter_obj, Q)
+        self._validate_values_are_expressions(args + tuple(kwargs.values()), method_name='aggregate')
+
+        for arg in args:
+            # The default_alias property raises TypeError if default_alias
+            # can't be set automatically or AttributeError if it isn't an
+            # attribute.
+            try:
+                arg.default_alias
+            except (AttributeError, TypeError):
+                raise TypeError("Complex aggregates require an alias")
+            kwargs[arg.default_alias] = arg
+        
+        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
+
+
+    def _get_annotations(column, column_values, data, aggregation):
+        value = data if hasattr(data, 'resolve_expression') else F(data)
+        return {
+            display_value: aggregation(Case(When(Q(**{column: column_value}), then=value)))
+            for column_value, display_value in column_values
+        }
+
     def count(self):
         """
         Perform a SELECT COUNT() and return the number of records as an
@@ -27,15 +124,33 @@ class DynamiDBModelQuerySet(models.QuerySet):
             return len(self._result_cache)
 
         return self.query.get_count(using=self.db)
-
+    # NOK
     def count(self):
         # return self.rows.count()
         return Row.objects.filter(table__name=type(self).__name__).count()
 
-    def all(self, size):
-        # Get instance class name => primary_key__table__name = type(self).__name__
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value')
-    
+
+    def get(self, *args, **kwargs):
+        """
+        Perform the query and return a single object matching the given
+        keyword arguments.
+        """
+        clone = self.filter(*args, **kwargs)
+        if self.query.can_filter() and not self.query.distinct_fields:
+            clone = clone.order_by()
+        num = len(clone)
+        if num == 1:
+            return clone._result_cache[0]
+        if not num:
+            raise self.model.DoesNotExist(
+                "%s matching query does not exist." %
+                self.model._meta.object_name
+            )
+        raise self.model.MultipleObjectsReturned(
+            "get() returned more than one %s -- it returned %s!" %
+            (self.model._meta.object_name, num)
+        )
+    # OK
     def get(self, **kwargs):
         ids = []
         table = Table.objects.get(name=type(self).__name__)
@@ -72,76 +187,133 @@ class DynamiDBModelQuerySet(models.QuerySet):
             (type(self).__name__, num)
         )
 
+    def create(self, **kwargs):
+        """
+        Create a new object with the given kwargs, saving it to the database
+        and returning the created object.
+        """
+        obj = self.model(**kwargs)
+        self._for_write = True
+        obj.save(force_insert=True, using=self.db)
+        return obj
 
-    # Simple filter. Don't support complex query with Q and F
-    def filter(self, **kwargs):
+    # OK
+    def create(self, defaults=None, **kwargs):
         ids = []
         table = Table.objects.get(name=type(self).__name__)
         cols_name = [col.name for col in Column.filter(table=table)]
-        if len(kwargs) > len(cols_name):
-            raise ValueError("Params are match more than this table defined comlumns.")
-        # Get cell primary_key__id from cells matching kwargs
-        for key, val in kwargs.iteritems():
-            if key in ['pk', 'id']:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, primary_key__id=val)]
-            elif key in cols_name:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, value_type__name=key, value=val)]
-            else:
-                raise exceptions.FieldError(
-                    "Invalid field name(s) for model %s: '%s'." %
-                    (type(self).__name__, key)
-                )
-        # remove duplicate id
-        ids = list(set(ids))
-        # Generate desired result with pivot
-        return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
 
-
-    def _attr_sort(self, attrs=['someAttributeString']:
-        '''helper to sort by the attributes named by strings of attrs in order'''
-        return lambda k: [ getattr(k, attr) for attr in attrs ]
-    # records.sort(key=self._attr_sort(attrs=[field_names]))
-
-    def order_by(self, *field_names):
-        """Return a new QuerySet instance with the ordering changed.""
-        assert self.query.can_filter(), \
-            "Cannot reorder a query once a slice has been taken."
-        obj = self._chain()
-        obj.query.clear_ordering(force_empty=False)
-        obj.query.add_ordering(*field_names)
-        return obj"""
-        # To sort the list in place...
-        ut.sort(key=lambda x: x.count, reverse=True)
+        lookup, params = self._extract_model_params(defaults, **kwargs)
         
-        L.sort(key=lambda i: (i.whatever, i.someother, i.anotherkey))
+        objs = []
+        
+        table_obj, table_created = Table.objects.get_or_create(name=type(self).__name__)
+        
+        if table_obj:
+            row_obj, row_created = Row.objects.get_or_create(table=table_obj)
+            if row_created:
+                for attr, val in self.__dict__.iteritems():
+                    col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
 
-        # To return a new list, use the sorted() built-in function...
-        newlist = sorted(ut, key=lambda x: x.count, reverse=True)
-        pass
+        List_of_objects = Cell.objects.bulk_create(objs)
+        
+        return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
 
-    # def __iter__(self):
-    #     return super(PivotModelQuerySet,self).__iter__()
 
-    # var is a Function => callable(var) , ou if isinstance(filter_obj, Q):
-    # Get function arg name => func.__code__.co_varnames
+    def get_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, creating one if necessary.
+        Return a tuple of (object, created), where created is a boolean
+        specifying whether an object was created.
+        """
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        # The get() needs to be targeted at the write database in order
+        # to avoid potential transaction consistency problems.
+        self._for_write = True
+        try:
+            return self.get(**lookup), False
+        except self.model.DoesNotExist:
+            return self._create_object_from_params(lookup, params)
 
-    # Get function arg value
-    # import inspect
-    # def func(a, b, c):
-    #    frame = inspect.currentframe()
-    #    args, _, _, values = inspect.getargvalues(frame)
-    #    print 'function name "%s"' % inspect.getframeinfo(frame)[2]
-    #    for i in args:
-    #        print "    %s = %s" % (i, values[i])
-    #   return [(i, values[i]) for i in args]
+    # OK
+    def get_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, creating one if necessary.
+        Return a tuple of (object, created), where created is a boolean
+        specifying whether an object was created.
+        """
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        # The get() needs to be targeted at the write database in order
+        # to avoid potential transaction consistency problems.
+        try:
+            return self.get(**lookup), False
+        except self.model.DoesNotExist:
+            return self._create_object_from_params(lookup, params)
+    
 
-    def aggregate(self, *args, **kwargs):
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
+    def update_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, updating one with defaults
+        if it exists, otherwise create a new one.
+        Return a tuple (object, created), where created is a boolean
+        specifying whether an object was created.
+        """
+        defaults = defaults or {}
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        self._for_write = True
+        with transaction.atomic(using=self.db):
+            try:
+                obj = self.select_for_update().get(**lookup)
+            except self.model.DoesNotExist:
+                obj, created = self._create_object_from_params(lookup, params)
+                if created:
+                    return obj, created
+            for k, v in defaults.items():
+                setattr(obj, k, v() if callable(v) else v)
+            obj.save(using=self.db)
+        return obj, False
+    # OK
+    def update_or_create(self, defaults=None, **kwargs):
+        """
+        Look up an object with the given kwargs, updating one with defaults
+        if it exists, otherwise create a new one.
+        Return a tuple (object, created), where created is a boolean
+        specifying whether an object was created.
+        """
+        defaults = defaults or {}
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        try:
+            #obj = self.select_for_update().get(**lookup)
+            obj = self.get(**lookup)
+        except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
+            obj, created = self._create_object_from_params(lookup, params)
+            if created:
+                return obj, created
 
-    # Simple values_list. Don't support bultin function eg. Entry.objects.values_list('id', Lower('headline'))
-    def values_list(self, *fields, flat=False, named=False):
-        return pivot(Cell.filter(primary_key__table__name=type(self).__name__, value_type__name__in=fields), 'value_type__name', 'primary_key__id', 'value')
+        for attr, val in defaults.items():
+            col_obj = Column.objects.get(table__name=type(self).__name__, name=attr)
+            Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id, value_type=col_obj).update(value=val() if callable(val) else val)
+        
+        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id), 'value_type__name', 'primary_key__id', 'value'), False
 
+
+    def _create_object_from_params(self, lookup, params):
+        """
+        Try to create an object using passed params. Used by get_or_create()
+        and update_or_create().
+        """
+        try:
+            with transaction.atomic(using=self.db):
+                params = {k: v() if callable(v) else v for k, v in params.items()}
+                obj = self.create(**params)
+            return obj, True
+        except IntegrityError as e:
+            try:
+                return self.get(**lookup), False
+            except self.model.DoesNotExist:
+                pass
+            raise e
     # OK
     def _create_object_from_params(self, lookup, params):
         """
@@ -169,6 +341,36 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 pass
             raise e
 
+
+    def _extract_model_params(self, defaults, **kwargs):
+        """
+        Prepare `lookup` (kwargs that are valid model attributes), `params`
+        (for creating a model instance) based on given kwargs; for use by
+        get_or_create() and update_or_create().
+        """
+        defaults = defaults or {}
+        lookup = kwargs.copy()
+        for f in self.model._meta.fields:
+            if f.attname in lookup:
+                lookup[f.name] = lookup.pop(f.attname)
+        params = {k: v for k, v in kwargs.items() if LOOKUP_SEP not in k}
+        params.update(defaults)
+        property_names = self.model._meta._property_names
+        invalid_params = []
+        for param in params:
+            try:
+                self.model._meta.get_field(param)
+            except exceptions.FieldDoesNotExist:
+                # It's okay to use a model's property if it has a setter.
+                if not (param in property_names and getattr(self.model, param).fset):
+                    invalid_params.append(param)
+        if invalid_params:
+            raise exceptions.FieldError(
+                "Invalid field name(s) for model %s: '%s'." % (
+                    self.model._meta.object_name,
+                    "', '".join(sorted(invalid_params)),
+                ))
+        return lookup, params
     # OK
     def _extract_model_params(self, defaults, **kwargs):
         """
@@ -220,113 +422,109 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 ))
         return lookup, params
 
-    # OK
-    def create(self, defaults=None, **kwargs):
+
+    ##################################################################
+    # PUBLIC METHODS THAT ALTER ATTRIBUTES AND RETURN A NEW QUERYSET #
+    ##################################################################
+    
+    # Simple filter. Don't support complex query with Q and F
+    def filter(self, **kwargs):
         ids = []
+        cols_name = self.get_columns_name()
+        if len(kwargs) > len(cols_name):
+            raise ValueError("Params are match more than this table defined comlumns.")
+        # Get cell primary_key__id from cells matching kwargs
+        for key, val in kwargs.iteritems():
+            if key in ['pk', 'id']:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, primary_key__id=val)]
+            elif key in cols_name:
+                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, value_type__name=key, value=val)]
+            else:
+                raise exceptions.FieldError(
+                    "Invalid field name(s) for model %s: '%s'." %
+                    (type(self).__name__, key)
+                )
+        # remove duplicate id
+        ids = list(set(ids))
+        # Generate desired result with pivot
+        return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
+
+    ###################
+    # PRIVATE METHODS #
+    ###################
+
+    def get_columns_name(self):
         table = Table.objects.get(name=type(self).__name__)
-        cols_name = [col.name for col in Column.filter(table=table)]
+        return [col.name for col in Column.filter(table=table)]
 
-        lookup, params = self._extract_model_params(defaults, **kwargs)
-        
-        objs = []
-        
-        table_obj, table_created = Table.objects.get_or_create(name=type(self).__name__)
-        
-        if table_obj:
-            row_obj, row_created = Row.objects.get_or_create(table=table_obj)
-            if row_created:
-                for attr, val in self.__dict__.iteritems():
-                    col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
-                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
+    @staticmethod
+    def _validate_values_are_expressions(values, method_name):
+        invalid_args = sorted(str(arg) for arg in values if not hasattr(arg, 'resolve_expression'))
+        if invalid_args:
+            raise TypeError(
+                'QuerySet.%s() received non-expression(s): %s.' % (
+                    method_name,
+                    ', '.join(invalid_args),
+                )
+            )
 
-        List_of_objects = Cell.objects.bulk_create(objs)
+    def get_custom_annotation(self):
+        # columns = Table.objects.get(name=type(self).__name__).columns.all().values('id','name')
+        # OR
+        columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
+        return {
+            column_name: Case(When(Q(column_id=col_id), then=F('value')))
+            for col_id, col_name in columns
+        }
+
+
+    # Simple values_list. Don't support bultin function eg. Entry.objects.values_list('id', Lower('headline'))
+    def values_list(self, *fields, flat=False, named=False):
+        return pivot(Cell.filter(primary_key__table__name=type(self).__name__, value_type__name__in=fields), 'value_type__name', 'primary_key__id', 'value')
+
+    #This API is called when there is a subquery. Injected tenant_ids for the subqueries.
+    def _as_sql(self, connection):
+        return super(DynamiDBModelQuerySet,self)._as_sql(connection)
+
+class DynamiDBModelManager(models.Manager):
+    
+    def get_queryset(self):
+    
+        # Generate models columns annotation
+        annotations = super(DynamiDBModelQuerySet,self).get_custom_annotation()
         
-        return pivot(List_of_objects, 'value_type__name', 'primary_key__id', 'value')
+        return DynamiDBModelQuerySet(self.model, using=self._db)
+            .filter(entity=type(self).__name__)  # Important!
+            .values(id=F('row_id'))  # Important, GROUP BY row_id
+            .annotate(**annotations) # Annotate with columns_name
+            .order_by() # Important
+            
 
-    # OK
-    def get_or_create(self, defaults=None, **kwargs):
-        """
-        Look up an object with the given kwargs, creating one if necessary.
-        Return a tuple of (object, created), where created is a boolean
-        specifying whether an object was created.
-        """
-        lookup, params = self._extract_model_params(defaults, **kwargs)
-        try:
-            return self.get(**lookup), False
-        except self.model.DoesNotExist:
-            return self._create_object_from_params(lookup, params)
-    
-    # OK
-    def update_or_create(self, defaults=None, **kwargs):
-        """
-        Look up an object with the given kwargs, updating one with defaults
-        if it exists, otherwise create a new one.
-        Return a tuple (object, created), where created is a boolean
-        specifying whether an object was created.
-        """
-        defaults = defaults or {}
-        lookup, params = self._extract_model_params(defaults, **kwargs)
-        try:
-            #obj = self.select_for_update().get(**lookup)
-            obj = self.get(**lookup)
-        except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
-            obj, created = self._create_object_from_params(lookup, params)
-            if created:
-                return obj, created
+    # cs = Cell.objects.distinct().values('row_id').order_by().annotate(
+    #     difficult=Case(When(column__name='difficult', then=F('value')),),
+    #     hand=Case(When(column__name='hand', then=F('value')),),
+    #     garden=Case(When(column__name='garden', then=F('value')),),
+    #     parent=Case(When(column__name='parent', then=F('value')),),
+    #     maintain=Case(When(column__name='maintain', then=F('value')),)
+    # ).values_list('difficult', 'hand', 'garden', 'parent', 'maintain')
 
-        for attr, val in defaults.items():
-            col_obj = Column.objects.get(table__name=type(self).__name__, name=attr)
-            Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id, value_type=col_obj).update(value=val() if callable(val) else val)
-        
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__, primary_key__id=obj.primary_key__id), 'value_type__name', 'primary_key__id', 'value'), False
+    # def get_queryset(self):
+    #     return super().get_queryset()
+    #         .filter(entity=type(self).__name__) # Important
+    #         .annotate()
+    #         .order_by() # Important
 
-    def earliest(self, *fields, field_name=None):
-        # return self._earliest_or_latest(*fields, field_name=field_name)
-        pass
-    
-    def latest(self, *fields, field_name=None):
-        # return self.reverse()._earliest_or_latest(*fields, field_name=field_name)
-        pass
-    
-    def first(self):
-        """Return the first object of a query or None if no match is found.""
-        for obj in (self if self.ordered else self.order_by('pk'))[:1]:
-            return obj
-        """
-        pass
-    
-    def last(self):
-        """Return the last object of a query or None if no match is found.""
-        for obj in (self.reverse() if self.ordered else self.order_by('-pk'))[:1]:
-            return obj
-        """
-        pass
-    
+    # def pdfs(self):
+    #     return self.get_queryset().pdfs()
+
+    # def smaller_than(self, size):
+    #     return self.get_queryset().smaller_than(size)
+
     # def update(self, **kwargs):
     #     self.add_tenant_filters_without_joins()
     #     #print(self.query.alias_refcount)
     #     return super(TenantQuerySet,self).update(**kwargs)
     
-    # def _update(self, values):
-    #     self.add_tenant_filters_without_joins()
-    #     #print(self.query.alias_refcount)
-    #     return super(TenantQuerySet,self)._update(values)
-    
-    #This API is called when there is a subquery. Injected tenant_ids for the subqueries.
-    def _as_sql(self, connection):
-        return super(DynamiDBModelQuerySet,self)._as_sql(connection)
-
-# pivot_table = pivot(ShirtSales.objects.filter(style='Golf'), 'region', 'shipped', 'units')
-class DynamiDBModelManager(models.Manager):
-    def get_queryset(self):
-        return DynamiDBModelQuerySet(self.model, using=self._db)  # Important!
-
-    def pdfs(self):
-        return self.get_queryset().pdfs()
-
-    def smaller_than(self, size):
-        return self.get_queryset().smaller_than(size)
-
 class Document(models.Model):
     name = models.CharField(max_length=30)
     size = models.PositiveIntegerField(default=0)
@@ -427,6 +625,15 @@ class Cell(models.Model):
     value_type = models.ForeignKey('Column', on_delete=models.CASCADE)
     value = models.CharField(max_length=500)
 
+    c = Cell.objects.annotate(id=Case(When(column__name='', then=Value('5%')), ), )
+
+cs = Cell.objects.distinct().values('row_id').order_by().annotate(
+    difficult=Case(When(column__name='difficult', then=F('value')),),
+    hand=Case(When(column__name='hand', then=F('value')),),
+    garden=Case(When(column__name='garden', then=F('value')),),
+    parent=Case(When(column__name='parent', then=F('value')),),
+    maintain=Case(When(column__name='maintain', then=F('value')),)
+).values_list('difficult', 'hand', 'garden', 'parent', 'maintain')
 
 #Modified QuerySet to add suitable filters on joins.
 class TenantQuerySet(models.QuerySet):
