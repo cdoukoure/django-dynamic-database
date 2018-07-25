@@ -1,8 +1,7 @@
 from django.core import exceptions
 from django.apps import apps
 from django.db import models
-from django.db.models import Avg, Q, F, sql
-from django_pivot.pivot import pivot
+from django.db.models import Aggregate, Avg, Q, F, sql
 try:
     from threading import local
 except ImportError:
@@ -13,10 +12,38 @@ import pdb
 
 _thread_locals = local()
 
+class GroupConcat(Aggregate):
+    function = 'GROUP_CONCAT'
+    template = '%(function)s(%(distinct)s%(expressions)s%(ordering)s%(separator)s)'
 
+    def __init__(self, expression, distinct=False, ordering=None, separator=',', **extra):
+        super(GroupConcat, self).__init__(
+            expression,
+            distinct='DISTINCT ' if distinct else '',
+            ordering=' ORDER BY %s' % ordering if ordering is not None else '',
+            separator=' SEPARATOR "%s"' % separator,
+            output_field=models.CharField(),
+            **extra
+        )
+
+class Concat(Aggregate):
+    function = 'GROUP_CONCAT'
+    template = '%(function)s(%(distinct)s%(expressions)s)'
+
+    def __init__(self, expression, distinct=False, **extra):
+        super(Concat, self).__init__(
+            expression,
+            distinct='DISTINCT ' if distinct else '',
+            output_field=models.CharField(),
+            **extra)
+
+
+#var=Concat(Case(When(column__name='var', then="value"), default='value',), Value(''), output_field=CharField())
 
 """
-SELECT row_id, 
+sqlite & MySql: GROUP_CONCAT(column_name) === PostgreSQL: array_to_string(array_agg(column_name), ',') === Oracle: LISTAGG(column_name, ',')
+
+SELECT row_id,
 (CASE WHEN column_name = 'nom' THEN value END) AS nom,
 (CASE WHEN column_name = 'genre' THEN value END) AS genre,
 SUM(CASE WHEN column_name = 'age' THEN value END) AS age
@@ -49,68 +76,11 @@ SELECT * FROM "Cell" WHERE column_name = 'nom';
 
 class DynamiDBModelQuerySet(models.QuerySet):
 
-    def __init__(self):
-        models.QuerySet.__init__(self)
-    
 
     ####################################
     # METHODS THAT DO DATABASE QUERIES #
     ####################################
 
-    def aggregate(self, *args, **kwargs):
-        """
-        Return a dictionary containing the calculations (aggregation)
-        over the current queryset.
-
-        If args is present the expression is passed as a kwarg using
-        the Aggregate object's default alias.
-        """
-        if self.query.distinct_fields:
-            raise NotImplementedError("aggregate() + distinct(fields) not implemented.")
-        self._validate_values_are_expressions(args + tuple(kwargs.values()), method_name='aggregate')
-        for arg in args:
-            # The default_alias property raises TypeError if default_alias
-            # can't be set automatically or AttributeError if it isn't an
-            # attribute.
-            try:
-                arg.default_alias
-            except (AttributeError, TypeError):
-                raise TypeError("Complex aggregates require an alias")
-            kwargs[arg.default_alias] = arg
-
-        query = self.query.chain()
-        for (alias, aggregate_expr) in kwargs.items():
-            query.add_annotation(aggregate_expr, alias, is_summary=True)
-            if not query.annotations[alias].contains_aggregate:
-                raise TypeError("%s is not an aggregate expression" % alias)
-        return query.get_aggregation(self.db, kwargs)
-    # NOK
-    def aggregate(self, *args, **kwargs):
-        # Avg(expression, output_field=FloatField(), filter=None, **extra)
-        # pivot_table = pivot(ShirtSales, 'region', 'shipped', F('units') * F('price'), Avg)
-        # Person.objects.raw('SELECT * FROM myapp_person')
-        # if isinstance(filter_obj, Q)
-        self._validate_values_are_expressions(args + tuple(kwargs.values()), method_name='aggregate')
-
-        for arg in args:
-            # The default_alias property raises TypeError if default_alias
-            # can't be set automatically or AttributeError if it isn't an
-            # attribute.
-            try:
-                arg.default_alias
-            except (AttributeError, TypeError):
-                raise TypeError("Complex aggregates require an alias")
-            kwargs[arg.default_alias] = arg
-        
-        return pivot(Cell.objects.filter(primary_key__table__name=type(self).__name__), 'value_type__name', 'primary_key__id', 'value', Avg)
-
-
-    def _get_annotations(column, column_values, data, aggregation):
-        value = data if hasattr(data, 'resolve_expression') else F(data)
-        return {
-            display_value: aggregation(Case(When(Q(**{column: column_value}), then=value)))
-            for column_value, display_value in column_values
-        }
 
     def count(self):
         """
@@ -453,7 +423,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
     # PRIVATE METHODS #
     ###################
 
-    def get_columns_name(self):
+    def _get_columns_name(self):
         table = Table.objects.get(name=type(self).__name__)
         return [col.name for col in Column.filter(table=table)]
 
@@ -469,18 +439,15 @@ class DynamiDBModelQuerySet(models.QuerySet):
             )
 
     def get_custom_annotation(self):
-        # columns = Table.objects.get(name=type(self).__name__).columns.all().values('id','name')
+        # columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
         # OR
-        columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
+        columns = Table.objects.get(name=type(self).__name__).columns.all().values('id','name')
+
         return {
-            column_name: Case(When(Q(column_id=col_id), then=F('value')))
+            column_name:Concat(Case(When(column_id=col_id, then=F('value')))
             for col_id, col_name in columns
         }
 
-
-    # Simple values_list. Don't support bultin function eg. Entry.objects.values_list('id', Lower('headline'))
-    def values_list(self, *fields, flat=False, named=False):
-        return pivot(Cell.filter(primary_key__table__name=type(self).__name__, value_type__name__in=fields), 'value_type__name', 'primary_key__id', 'value')
 
     #This API is called when there is a subquery. Injected tenant_ids for the subqueries.
     def _as_sql(self, connection):
@@ -508,10 +475,9 @@ class DynamiDBModelManager(models.Manager):
         
         return DynamiDBModelQuerySet(self.model, using=self._db)
             .filter(entity=type(self).__name__)  # Important!
-            .values(id=F('row_id'))  # Important, GROUP BY row_id
+            .values('row_id')  # Important, # values + annotate => GROUP BY row_id
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
-            
 
     # cs = Cell.objects.distinct().values('row_id').order_by().annotate(
     #     difficult=Case(When(column__name='difficult', then=F('value')),),
