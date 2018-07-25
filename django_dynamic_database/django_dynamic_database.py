@@ -12,6 +12,18 @@ import pdb
 
 _thread_locals = local()
 
+"""
+
+We must have database aggregate fonction like SUM, AVG, COUNT ... to generate SQL group_by on only one column (row_id)
+Otherwise, Django will do group_by on all fields created in annotations
+That why we use custom functions GroupConcat and Concat.
+
+---
+
+For the moment, we use Concat in the generated annotations
+
+"""
+
 class GroupConcat(Aggregate):
     function = 'GROUP_CONCAT'
     template = '%(function)s(%(distinct)s%(expressions)s%(ordering)s%(separator)s)'
@@ -471,7 +483,7 @@ class DynamiDBModelManager(models.Manager):
     def get_queryset(self):
     
         # Generate models columns annotation
-        annotations = super(DynamiDBModelQuerySet,self).get_custom_annotation()
+        annotations = super(DynamiDBModelQuerySet,self)._get_custom_annotation()
         
         return DynamiDBModelQuerySet(self.model, using=self._db)
             .filter(entity=type(self).__name__)  # Important!
