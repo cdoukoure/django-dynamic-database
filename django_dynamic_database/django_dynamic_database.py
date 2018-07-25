@@ -38,6 +38,7 @@ class GroupConcat(Aggregate):
             **extra
         )
 
+
 class Concat(Aggregate):
     function = 'GROUP_CONCAT'
     template = '%(function)s(%(distinct)s%(expressions)s)'
@@ -50,125 +51,50 @@ class Concat(Aggregate):
             **extra)
 
 
-#var=Concat(Case(When(column__name='var', then="value"), default='value',), Value(''), output_field=CharField())
-
-"""
-sqlite & MySql: GROUP_CONCAT(column_name) === PostgreSQL: array_to_string(array_agg(column_name), ',') === Oracle: LISTAGG(column_name, ',')
-
-SELECT row_id,
-(CASE WHEN column_name = 'nom' THEN value END) AS nom,
-(CASE WHEN column_name = 'genre' THEN value END) AS genre,
-SUM(CASE WHEN column_name = 'age' THEN value END) AS age
-FROM "Cell" 
-GROUP BY row_id;
-
-SELECT COUNT(*) FROM 
-( SELECT row_id, 
-UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
-SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
-FROM "Cell" 
-GROUP BY row_id) ;
-
-SELECT AVG(AGE) FROM 
-( SELECT row_id, 
-UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
-SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
-FROM "Cell" 
-GROUP BY row_id) ;
-SELECT MAX(AGE) FROM 
-( SELECT row_id, 
-UPPER(CASE WHEN column_name = 'genre' THEN value END) AS GENDER,
-SUM(CASE WHEN column_name = 'age' THEN value END) AS AGE
-FROM "Cell" 
-GROUP BY row_id) ;
-
-SELECT * FROM "Cell" WHERE column_name = 'nom';
-
-"""
 
 class DynamiDBModelQuerySet(models.QuerySet):
-
 
     ####################################
     # METHODS THAT DO DATABASE QUERIES #
     ####################################
 
+    """
+    Used in QuerySet.get() to convert dict into class instance
 
-    def count(self):
+    """
+    class Struct(object):
+        def __init__(self, adict):
+            """
+            Convert a dictionary to a class
+            @param :adict Dictionary
+            """
+            self.__dict__.update(adict)
+            for k, v in adict.items():
+                if isinstance(v, dict):
+                    self.__dict__[k] = Struct(v)
+
+    def dict_to_object(adict):
         """
-        Perform a SELECT COUNT() and return the number of records as an
-        integer.
-
-        If the QuerySet is already fully cached, return the length of the
-        cached results set to avoid multiple SELECT COUNT(*) calls.
+        Convert a dictionary to a class
+        @param :adict Dictionary
+        @return :class:Struct
         """
-        if self._result_cache is not None:
-            return len(self._result_cache)
-
-        return self.query.get_count(using=self.db)
-    # NOK
-    def count(self):
-        # return self.rows.count()
-        return Row.objects.filter(table__name=type(self).__name__).count()
+        return Struct(adict)
 
 
     def get(self, *args, **kwargs):
-        """
-        Perform the query and return a single object matching the given
-        keyword arguments.
-        """
-        clone = self.filter(*args, **kwargs)
-        if self.query.can_filter() and not self.query.distinct_fields:
-            clone = clone.order_by()
-        num = len(clone)
-        if num == 1:
-            return clone._result_cache[0]
-        if not num:
-            raise self.model.DoesNotExist(
-                "%s matching query does not exist." %
-                self.model._meta.object_name
-            )
-        raise self.model.MultipleObjectsReturned(
-            "get() returned more than one %s -- it returned %s!" %
-            (self.model._meta.object_name, num)
-        )
-    # OK
-    def get(self, **kwargs):
-        ids = []
-        table = Table.objects.get(name=type(self).__name__)
-        cols_name = [col.name for col in Column.objects.filter(table=table)]
-        if len(kwargs) > len(cols_name):
-            raise ValueError("Params are match more than this table defined columns.")
         
-        # Get cell primary_key__id from cells matching kwargs
-        for key, val in kwargs.iteritems():
-            if key in ['pk', 'id']:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, primary_key__id=val)]
-            elif key in cols_name:
-                ids = ids + [cell.primary_key__id for cell in Cell.filter(primary_key__table=table, value_type__name=key, value=val)]
-            else:
-                raise exceptions.FieldError(
-                    "Invalid field name(s) for model %s: '%s'." %
-                    (type(self).__name__, key)
-                )
-                
-        # remove duplicate id
-        ids = list(set(ids))
-        # Generate desired result with pivot
-        res = pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
-        num = len(res)
-        if num == 1:
-            return res[0]
-        if not num:
-            raise super(DynamiDBModelQuerySet,self).model.DoesNotExist(
-                "%s matching query does not exist." %
-                type(self).__name__
-            )
-        raise super(DynamiDBModelQuerySet,self).model.MultipleObjectsReturned(
-            "get() returned more than one %s -- it returned %s!" %
-            (type(self).__name__, num)
-        )
-
+        # returning dict
+        res = super(DynamiDBModelQuerySet,self).get(self, *args, **kwargs)
+        
+        if type(res).__name__ === 'dict':
+            res = self.dict_to_object(res) # Converting to object
+            res.__class__ = type(self).__name__
+            return res
+        else:
+            return res
+        
+    
     def create(self, **kwargs):
         """
         Create a new object with the given kwargs, saving it to the database
@@ -182,7 +108,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
     # OK
     def create(self, defaults=None, **kwargs):
         ids = []
-        table = Table.objects.get(name=type(self).__name__)
+        table, created = Table.objects.get_or_create(name=type(self).__name__)
         cols_name = [col.name for col in Column.filter(table=table)]
 
         lookup, params = self._extract_model_params(defaults, **kwargs)
@@ -218,21 +144,6 @@ class DynamiDBModelQuerySet(models.QuerySet):
         except self.model.DoesNotExist:
             return self._create_object_from_params(lookup, params)
 
-    # OK
-    def get_or_create(self, defaults=None, **kwargs):
-        """
-        Look up an object with the given kwargs, creating one if necessary.
-        Return a tuple of (object, created), where created is a boolean
-        specifying whether an object was created.
-        """
-        lookup, params = self._extract_model_params(defaults, **kwargs)
-        # The get() needs to be targeted at the write database in order
-        # to avoid potential transaction consistency problems.
-        try:
-            return self.get(**lookup), False
-        except self.model.DoesNotExist:
-            return self._create_object_from_params(lookup, params)
-    
 
     def update_or_create(self, defaults=None, **kwargs):
         """
@@ -324,43 +235,15 @@ class DynamiDBModelQuerySet(models.QuerySet):
             raise e
 
 
+    """
     def _extract_model_params(self, defaults, **kwargs):
-        """
+        ""
         Prepare `lookup` (kwargs that are valid model attributes), `params`
         (for creating a model instance) based on given kwargs; for use by
         get_or_create() and update_or_create().
-        """
-        defaults = defaults or {}
-        lookup = kwargs.copy()
-        for f in self.model._meta.fields:
-            if f.attname in lookup:
-                lookup[f.name] = lookup.pop(f.attname)
-        params = {k: v for k, v in kwargs.items() if LOOKUP_SEP not in k}
-        params.update(defaults)
-        property_names = self.model._meta._property_names
-        invalid_params = []
-        for param in params:
-            try:
-                self.model._meta.get_field(param)
-            except exceptions.FieldDoesNotExist:
-                # It's okay to use a model's property if it has a setter.
-                if not (param in property_names and getattr(self.model, param).fset):
-                    invalid_params.append(param)
-        if invalid_params:
-            raise exceptions.FieldError(
-                "Invalid field name(s) for model %s: '%s'." % (
-                    self.model._meta.object_name,
-                    "', '".join(sorted(invalid_params)),
-                ))
-        return lookup, params
-    # OK
-    def _extract_model_params(self, defaults, **kwargs):
-        """
-        Prepare `lookup` (kwargs that are valid model attributes), `params`
-        (for creating a model instance) based on given kwargs; for use by
-        get_or_create() and update_or_create().
-        """
+        
         cols_name = []
+        
         defaults = defaults or {}
         lookup = kwargs.copy()
 
@@ -368,7 +251,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
 
         if created:
             cols = []
-            """
+            ""
             cols = list(set(chain.from_iterable(
                 (field.name, field.attname) if hasattr(field, 'attname') else (field.name,)
                 for field in MyModel._meta.get_fields()
@@ -376,7 +259,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 # GenericForeignKey from the results.
                 if not (field.many_to_one and field.related_model is None)
             )))
-            """
+            ""
             for field in type(self)._meta.get_fields():
                 cols.append(Column(table=table, name=field.name, type=type(field).__name__))
                 cols_name.append(field.name)
@@ -396,19 +279,24 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 pass
             else:
                 invalid_params.append(param)
+
+        for f in self.model._meta.fields:
+            if f.attname in lookup:
+                lookup[f.name] = lookup.pop(f.attname)
         if invalid_params:
             raise exceptions.FieldError(
                 "Invalid field name(s) for model %s: '%s'." % (
-                    type(self).__name__,
+                    self.model._meta.object_name,
                     "', '".join(sorted(invalid_params)),
                 ))
         return lookup, params
-
+    """
 
     ##################################################################
     # PUBLIC METHODS THAT ALTER ATTRIBUTES AND RETURN A NEW QUERYSET #
     ##################################################################
     
+    """"
     # Simple filter. Don't support complex query with Q and F
     def filter(self, **kwargs):
         ids = []
@@ -430,7 +318,8 @@ class DynamiDBModelQuerySet(models.QuerySet):
         ids = list(set(ids))
         # Generate desired result with pivot
         return pivot(Cell.objects.filter(primary_key__id__in=ids), 'value_type__name', 'primary_key__id', 'value')
-
+    """"
+    
     ###################
     # PRIVATE METHODS #
     ###################
@@ -491,37 +380,12 @@ class DynamiDBModelManager(models.Manager):
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
 
-    # cs = Cell.objects.distinct().values('row_id').order_by().annotate(
-    #     difficult=Case(When(column__name='difficult', then=F('value')),),
-    #     hand=Case(When(column__name='hand', then=F('value')),),
-    #     garden=Case(When(column__name='garden', then=F('value')),),
-    #     parent=Case(When(column__name='parent', then=F('value')),),
-    #     maintain=Case(When(column__name='maintain', then=F('value')),)
-    # ).values_list('difficult', 'hand', 'garden', 'parent', 'maintain')
 
-    # def get_queryset(self):
-    #     return super().get_queryset()
-    #         .filter(entity=type(self).__name__) # Important
-    #         .annotate()
-    #         .order_by() # Important
 
-    # def pdfs(self):
-    #     return self.get_queryset().pdfs()
-
-    # def smaller_than(self, size):
-    #     return self.get_queryset().smaller_than(size)
-
-    # def update(self, **kwargs):
-    #     self.add_tenant_filters_without_joins()
-    #     #print(self.query.alias_refcount)
-    #     return super(TenantQuerySet,self).update(**kwargs)
-    
 class Document(models.Model):
-    name = models.CharField(max_length=30)
-    size = models.PositiveIntegerField(default=0)
-    file_type = models.CharField(max_length=10, blank=True)
-
     objects = DocumentManager()
+
+
 
 class Table(models.Model):
 
