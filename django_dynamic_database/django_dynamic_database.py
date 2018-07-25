@@ -122,7 +122,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
         if type(res).__name__ === 'dict':
             res = self._dict_to_object(res) # Converting to object
             res.__class__ = type(self).__name__
-            res.save = types.MethodType(self.dynamic_object_save, res) # bound save() method to the object
+            res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
             return res
         else:
             return res
@@ -180,6 +180,10 @@ class DynamiDBModelQuerySet(models.QuerySet):
 
 
     # OK
+    def _dynamic_object_save(self):
+        params = self.__dict__
+        return self.update_or_create(**params)
+    
     def update_or_create(self, defaults=None, **kwargs):
         """
         Look up an object with the given kwargs, updating one with defaults
