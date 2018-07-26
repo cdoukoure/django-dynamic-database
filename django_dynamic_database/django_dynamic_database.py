@@ -129,7 +129,7 @@ class DynamicDBModelQuerySet(models.QuerySet):
         # returning dict
         res = super(DynamiDBModelQuerySet,self).get(self, *args, **kwargs)
         
-        if type(res).__name__ === 'dict':
+        if isinstance(res, dict):
             res = self._dict_to_object(res) # Converting to object
             # res.__class__ = type(self).__name__
             # res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
