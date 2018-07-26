@@ -46,7 +46,7 @@ class Cell(models.Model):
 
 """
 
-We must have database aggregate fonction like SUM, AVG, COUNT ... to generate SQL group_by on only one column (row_id)
+We must have database aggregation fonction like SUM, AVG, COUNT ... to on all annotation to generate SQL group_by on only one column (row_id)
 Otherwise, Django will do group_by on all fields created in annotations
 That why we use custom functions GroupConcat and Concat.
 
@@ -84,7 +84,7 @@ class Concat(Aggregate):
 
 
 
-class DynamiDBModelQuerySet(models.QuerySet):
+class DynamicDBModelQuerySet(models.QuerySet):
 
     ################################################################
     #  Used in QuerySet.get() to convert dict into class instance  #
@@ -101,13 +101,19 @@ class DynamiDBModelQuerySet(models.QuerySet):
                 if isinstance(v, dict):
                     self.__dict__[k] = Struct(v)
 
+
     def _dict_to_object(adict):
         """
         Convert a dictionary to a class
         @param :adict Dictionary
         @return :class:Struct
         """
-        return Struct(adict)
+        # return Struct(adict)
+        
+        res = Struct(adict)
+        res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
+        res.__class__.__name__ = type(self).__name__
+        return res
 
 
     ####################################
@@ -121,8 +127,8 @@ class DynamiDBModelQuerySet(models.QuerySet):
         
         if type(res).__name__ === 'dict':
             res = self._dict_to_object(res) # Converting to object
-            res.__class__ = type(self).__name__
-            res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
+            # res.__class__ = type(self).__name__
+            # res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
             return res
         else:
             return res
@@ -184,6 +190,7 @@ class DynamiDBModelQuerySet(models.QuerySet):
         params = self.__dict__
         return self.update_or_create(**params)
     
+
     def update_or_create(self, defaults=None, **kwargs):
         """
         Look up an object with the given kwargs, updating one with defaults
@@ -258,38 +265,72 @@ class DynamiDBModelQuerySet(models.QuerySet):
             for col_id, col_name in columns
         }
 
+    def _get_values_columns(self):
+        # columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
+        # OR
+        column_names = self._get_columns_name()
 
-class DynamiDBModelManager(models.Manager):
+        values = {
+            col_name:F(col_name)
+            for col_name in column_names
+        }
+        values[id]=F('primary_key') # Convert 'primary_key' to 'id'
+        
+        return values
+
+    def as_manager(cls):
+        # Make sure this way of creating managers works.
+        manager = DynamicDBModelManager.from_queryset(cls)()
+        manager._built_with_as_manager = True
+        return manager
+    as_manager.queryset_only = True
+    as_manager = classmethod(as_manager)
+
+
+
+class DynamicDBModelManager(models.Manager):
     """
-    Generating custom initial queryset from pivoting datatable cell. 
-    OK With this SQL syntaxe
+    Base class for a model manager.
+    """
+    #: The queryset class to use.
+    queryset_class = DynamicDBModelQuerySet
 
-    Trying to do this with Django ORM
-    
+ 
+    """
+    Generating custom initial queryset by pivoting datatable cell.
+    ----
     SELECT row_id AS id,
     (CASE WHEN column_name = 'xxx' THEN value END) AS column_name,
     ...
     AGGREGATION(CASE WHEN column_name = 'xxx' THEN value END) AS column_name,
     FROM "Cell"
     GROUP BY id;
-
     """
     def get_queryset(self):
     
         # Generate models columns annotation
-        annotations = super(DynamiDBModelQuerySet,self)._get_custom_annotation()
-        
+        annotations = super(DynamicDBModelQuerySet,self)._get_custom_annotation()
+        # Generate final models columns values
+        values = super(DynamicDBModelQuerySet,self)._get_values_columns()
+
+        """"
         return DynamiDBModelQuerySet(self.model, using=self._db)
             .filter(entity=type(self).__name__)  # Important!
             .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
+        """"
+
+        return Cell.objects.filter(primary_key__table__name=type(self).__name__)  # Important!
+            .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
+            .annotate(**annotations) # Annotate with columns_name
+            .values(**values)  # Convert 'primary_key' to 'id'
+            .order_by() # Important
 
 
-
-class DynamiDBModel(models.Model):
+class DynamicDBModel(models.Model):
     
-    objects = DynamiDBModelManager()
+    objects = DynamicDBModelManager()
 
     class Meta:
         abstract = True
