@@ -268,7 +268,7 @@ class DynamicDBModelQuerySet(models.QuerySet):
         columns = Table.objects.get(name=table_name).columns.all().values('id','name')
 
         return {
-            column_name:Concat(Case(When(column_id=col_id, then=F('value')))
+            column_name:Concat(Case(When(column_id=col_id, then=F('value'))))
             for col_id, col_name in columns
         }
 
