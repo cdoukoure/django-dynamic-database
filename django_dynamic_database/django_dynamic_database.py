@@ -331,10 +331,10 @@ class DynamicDBModelManager(models.Manager):
         table_name = convert(type(self).__name__)
 
         return Cell.objects.filter(primary_key__table__name=table_name)  # Important!
-            .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
-            .annotate(**annotations) # Annotate with columns_name
-            .values(**values)  # Convert 'primary_key' to 'id'
-            .order_by() # Important
+        .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
+        .annotate(**annotations) # Annotate with columns_name
+        .values(**values)  # Convert 'primary_key' to 'id'
+        .order_by() # Important
 
 
 class DynamicDBModel(models.Model):
