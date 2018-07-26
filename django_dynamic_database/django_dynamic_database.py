@@ -321,13 +321,13 @@ class DynamicDBModelManager(models.Manager):
         # Generate final models columns values
         values = super(DynamicDBModelQuerySet,self)._get_values_columns()
 
-        """"
+        """
         return DynamiDBModelQuerySet(self.model, using=self._db)
             .filter(entity=type(self).__name__)  # Important!
             .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
-        """"
+        """
         table_name = convert(type(self).__name__)
 
         return Cell.objects.filter(primary_key__table__name=table_name)  # Important!
