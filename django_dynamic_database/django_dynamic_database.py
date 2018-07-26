@@ -1,14 +1,8 @@
+import re
 from django.core import exceptions
 from django.apps import apps
 from django.db import models
 from django.db.models import Aggregate, Avg, Q, F, sql
-
-try:
-    from threading import local
-except ImportError:
-    from django.utils._threading_local import local
-
-from collections import OrderedDict
 
 import types
 
@@ -84,6 +78,16 @@ class Concat(Aggregate):
 
 
 
+# From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
+# Convert Model Name to lower_case_with_underscore
+first_cap_re = re.compile('(.)([A-Z][a-z]+)')
+all_cap_re = re.compile('([a-z0-9])([A-Z])')
+def convert(name):
+    s1 = first_cap_re.sub(r'\1_\2', name)
+    return all_cap_re.sub(r'\1_\2', s1).lower()
+
+
+
 class DynamicDBModelQuerySet(models.QuerySet):
 
     ################################################################
@@ -143,7 +147,9 @@ class DynamicDBModelQuerySet(models.QuerySet):
         
         objs = []
         
-        table_obj, table_created = Table.objects.get_or_create(name=type(self).__name__)
+        table_name = convert(type(self).__name__)
+        
+        table_obj, table_created = Table.objects.get_or_create(name=table_name)
         
         # Create column for this new table
         if table_created:
@@ -256,9 +262,10 @@ class DynamicDBModelQuerySet(models.QuerySet):
 
 
     def _get_custom_annotation(self):
+        table_name = convert(type(self).__name__)
         # columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
         # OR
-        columns = Table.objects.get(name=type(self).__name__).columns.all().values('id','name')
+        columns = Table.objects.get(name=table_name).columns.all().values('id','name')
 
         return {
             column_name:Concat(Case(When(column_id=col_id, then=F('value')))
@@ -278,6 +285,7 @@ class DynamicDBModelQuerySet(models.QuerySet):
         
         return values
 
+    
     def as_manager(cls):
         # Make sure this way of creating managers works.
         manager = DynamicDBModelManager.from_queryset(cls)()
@@ -320,8 +328,9 @@ class DynamicDBModelManager(models.Manager):
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
         """"
+        table_name = convert(type(self).__name__)
 
-        return Cell.objects.filter(primary_key__table__name=type(self).__name__)  # Important!
+        return Cell.objects.filter(primary_key__table__name=table_name)  # Important!
             .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
             .annotate(**annotations) # Annotate with columns_name
             .values(**values)  # Convert 'primary_key' to 'id'
