@@ -8,7 +8,6 @@ DATABASES = {
 }
 
 INSTALLED_APPS = (
-    'django_dynamic_database',
     'django_dynamic_database.tests.dynamic_database',
 )
 

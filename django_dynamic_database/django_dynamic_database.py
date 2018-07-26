@@ -31,6 +31,7 @@ class Row(models.Model):
     def __str__(self):
         return self.name
 
+
 class Cell(models.Model):
 
     primary_key = models.ForeignKey('Row', on_delete=models.CASCADE)

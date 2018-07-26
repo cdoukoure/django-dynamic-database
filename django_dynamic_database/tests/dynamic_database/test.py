@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils.encoding import force_text
 
 from .models import Student
-from django_dynamic_database.django_dynamic_database import Table, Column, Row, Cell, DynamicDBModel
+# from django_dynamic_database.django_dynamic_database import Table, Column, Row, Cell, DynamicDBModel
 
 
 class Tests(TestCase):
