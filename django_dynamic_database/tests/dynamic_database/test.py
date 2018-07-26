@@ -15,7 +15,7 @@ class Tests(TestCase):
     @classmethod
     def setUpClass(cls):
         super(Tests, cls).setUpClass()
-        # Generate a bunch of data to pivot
+        # Generate a bunch of data
         Student(first_name='Neo', last_name='Dicker').save()
         Student(first_name='John', last_name='Witch').save()
         Student(first_name='Jean', last_name='Reno').save()
