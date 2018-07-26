@@ -24,7 +24,7 @@ First install the module, preferably in a virtual environment::
 
 Or install the current repository::
 
-    pip install -e git+https://github.com/django-polymorphic/django-polymorphic-tree.git#egg=django-dynamic-database
+    pip install -e git+https://github.com/cdoukoure/django-dynamic-database.git#egg=django-dynamic-database
 
 
 Configuration
