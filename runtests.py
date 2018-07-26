@@ -26,12 +26,12 @@ if __name__ == '__main__':
     import django
     from django.test.utils import get_runner
     from django.conf import settings
-    # from django.core.management import call_command
+    from django.core.management import call_command
 
     if hasattr(django, 'setup'):
         django.setup()
-        # call_command('makemigrations')
-        # call_command('migrate')
+        call_command('makemigrations')
+        call_command('migrate')
 
     TestRunner = get_runner(settings)
     runner = TestRunner(verbosity=1, interactive=True, failfast=False)
