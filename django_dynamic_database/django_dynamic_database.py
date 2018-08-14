@@ -48,7 +48,7 @@ class Concat(Aggregate):
 
     def as_postgresql(self, compiler, connection):
         # PostgreSQL method
-        return self.as_sql(compiler, connection, function='STRING_AGG', template="%(function)s(%(expressions)s, ',')")
+        return self.as_sql(compiler, connection, function='ARRAY_TO_STRING', template="%(function)s(ARRAY_AGG(%(expressions)s), ',')")
 
 
 # From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
