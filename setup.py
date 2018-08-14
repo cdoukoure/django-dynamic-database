@@ -19,5 +19,5 @@ setup(
         'Programming Language :: Python :: 3.6'
     ],
     packages=find_packages(),
-    install_requires=['django>=1.10', 'django-pivot>=1.6.1']
+    install_requires=['django>=1.10']
 )

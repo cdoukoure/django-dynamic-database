@@ -1,6 +1,9 @@
 import re
+from itertools import chain
 from django.db import models
-from django.db.models import Aggregate, F
+from django.db.models import Aggregate, F, Case, When
+from django.core.exceptions import ObjectDoesNotExist
+
 from .models import Table, Column, Row, Cell
 
 import types
@@ -57,45 +60,18 @@ def convert(name):
 
 class DynamicDBModelQuerySet(models.QuerySet):
 
-    ################################################################
-    #  Used in QuerySet.get() to convert dict into class instance  #
-    ################################################################
-
-    class Struct(object):
-        def __init__(self, adict):
-            """
-            Convert a dictionary to a class
-            @param :adict Dictionary
-            """
-            self.__dict__.update(adict)
-            for k, v in adict.items():
-                if isinstance(v, dict):
-                    self.__dict__[k] = Struct(v)
-
-
-    def _dict_to_object(adict):
-        """
-        Convert a dictionary to a class
-        @param :adict Dictionary
-        @return :class:Struct
-        """
-        # return Struct(adict)
-        
-        res = Struct(adict)
-        res.save = types.MethodType(self._dynamic_object_save, res) # bound save() method to the object
-        res.__class__.__name__ = type(self).__name__
-        return res
-
 
     ####################################
     # METHODS THAT DO DATABASE QUERIES #
     ####################################
-
+    
+    # def all(self, size=None):
+    #     return super(DynamicDBModelQuerySet,self).as_manager().get_queryset()
+    
+    """
     # OK
     def get(self, *args, **kwargs):
-        # returning dict
-        res = super(DynamiDBModelQuerySet,self).get(self, *args, **kwargs)
-        
+        res = super(DynamicDBModelQuerySet,self).as_manager().get_queryset().get(self, *args, **kwargs)
         if isinstance(res, dict):
             res = self._dict_to_object(res) # Converting to object
             # res.__class__ = type(self).__name__
@@ -103,90 +79,93 @@ class DynamicDBModelQuerySet(models.QuerySet):
             return res
         else:
             return res
-        
-    # OK
+    """
+    
     def create(self, defaults=None, **kwargs):
         ids = []
-        # table, created = Table.objects.get_or_create(name=type(self).__name__)
-        # cols_name = [col.name for col in Column.filter(table=table)]
 
-        # lookup, params = self._extract_model_params(defaults, **kwargs)
+        lookup, params = self._extract_model_params(defaults, **kwargs)
         
         objs = []
+        column_names = self._get_columns_name()
+
+        # print(str(column_names))
+
+        table_name = convert(self.model.__name__)
         
-        table_name = convert(type(self).__name__)
+        # print(table_name)
         
         table_obj, table_created = Table.objects.get_or_create(name=table_name)
         
+        # print(str(table_obj.__dict__))
+        
         # Create column for this new table
         if table_created:
-            column_names = self._get_columns_name()
             # batch_size = len(column_names) # To use in bulk_create()
             col_set = []
             for colname in column_names:
                 col_set.append(Column(table=table_obj, name=colname))
             Column.objects.bulk_create(col_set)
-        
+    
+    
         if table_obj is not None:
             # Create row to initialize pk
             row_obj = Row.objects.create(table=table_obj)
             if row_obj is not None:
-                for attr, val in kwargs.iteritems():
+                # print("row_created")
+                for attr, val in list(params.items()):
                     col_obj = Column.objects.get(table=table_obj, name=attr)
-                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=val))
-
+                    # print(str(col_obj.__dict__))
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=str(val)))
+                
                 Cell.objects.bulk_create(objs)
+                # print("cells_bulk_created")
                 
                 annotations = self._get_custom_annotation()
+                # print(str(annotations))
+                # print("annotations_created")
+                values = self._get_query_values(column_names)
+                # print(str(values))
+                # print("values_created")
                 
-                obj = Cell.objects.values('primary_key').annotate(**annotations).filter(primary_key=row_obj)
-                
-                return self._dict_to_object(obj._result_cache[0])
-
-    # OK
-    def get_or_create(self, defaults=None, **kwargs):
-        """
-        Look up an object with the given kwargs, creating one if necessary.
-        Return a tuple of (object, created), where created is a boolean
-        specifying whether an object was created.
-        """
-        lookup, params = self._extract_model_params(defaults, **kwargs)
-
-        try:
-            return self.get(**lookup), False
-        except self.model.DoesNotExist:
-            return self._create_object_from_params(lookup, params)
+                try:
+                    obj = Cell.objects.values('primary_key').annotate(**annotations).filter(primary_key=row_obj).values(**values).order_by()
+                    # print(obj)
+                    # print("obj_created")
+                    res = self._dict_to_object(obj[0])
+                    # print(res.std_name)
+                    return res
+                except ValueError:
+                    print(str(self._dict_to_object(obj[0])))
 
 
     # OK
-    def _dynamic_object_save(self):
+    def save(self):
         params = self.__dict__
-        return self.update_or_create(**params)
+        params = {k: v() if (callable(v) and v.__name__ != 'save') else v for k, v in params.items()}
+        self._save(**params)
     
 
-    def update_or_create(self, defaults=None, **kwargs):
-        """
-        Look up an object with the given kwargs, updating one with defaults
-        if it exists, otherwise create a new one.
-        Return a tuple (object, created), where created is a boolean
-        specifying whether an object was created.
-        """
-        defaults = defaults or {}
+    def _save(self, **kwargs):
+        # Check if provided kwargs is valid
         lookup, params = self._extract_model_params(defaults, **kwargs)
-        try:
-            # obj = Cell.objects.select_for_update().get(**lookup)
-            obj = self.get(**lookup)
-        except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
-            obj, created = self._create_object_from_params(lookup, params)
-            if created:
-                return obj, created
 
-        for attr, val in defaults.items():
-            for k, v in defaults.items():
-                setattr(obj, k, v() if callable(v) else v)
-            obj.save()
-        return obj, False
-
+        table_name = convert(self.model.__name__)
+        
+        table_obj, table_created = Table.objects.get_or_create(name=table_name)
+        
+        obj_id = kwargs.pop('id', None)
+        
+        # Check if it is new row
+        if obj_id is None:
+            row_obj = Row.objects.create(table=table_obj)
+        else:
+            row_obj = Row.objects.get(pk=obj_id, table=table_obj)
+                
+        for attr, val in list(params.items()):
+            col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
+            cell_obj = Cell.objects.update_or_create(primary_key=row_obj, value_type=col_obj, value=str(val))
+            params.pop(attr, None)
 
     # OK
     def _create_object_from_params(self, lookup, params):
@@ -201,7 +180,7 @@ class DynamicDBModelQuerySet(models.QuerySet):
         except IntegrityError as e:
             try:
                 return self.get(**lookup), False
-            except super(DynamiDBModelQuerySet,self).model.DoesNotExist:
+            except super(DynamicDBModelQuerySet,self).model.DoesNotExist:
                 pass
             raise e
 
@@ -220,39 +199,60 @@ class DynamicDBModelQuerySet(models.QuerySet):
         # return [col.name for col in Column.filter(table=table)]
         cols = list(set(chain.from_iterable(
             (field.name, field.attname) if hasattr(field, 'attname') else (field.name,)
-            for field in MyModel._meta.get_fields()
+            for field in self.model._meta.get_fields()
             # For complete backwards compatibility, you may want to exclude
             # GenericForeignKey from the results.
-            if not (field.many_to_one and field.related_model is None)
+            if not (field.name == 'id' or (field.many_to_one and field.related_model is None))
         )))
         return cols
 
 
-    def _get_custom_annotation(self):
-        table_name = convert(type(self).__name__)
+    def _get_custom_annotation(self, table_name=None):
+
+        if table_name is None:
+            table_name = convert(self.model.__name__)
+        
+        # print(table_name)
         # columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
         # OR
-        columns = Table.objects.get(name=table_name).columns.all().values('id','name')
+        try:
+            columns = Table.objects.get(name=table_name).columns.all().values('id','name')
+            return {
+                col["name"]:Concat(Case(When(value_type__id=col["id"], then=F('value'))))
+                for col in columns
+            }
+        except ObjectDoesNotExist:
+            return None
 
-        return {
-            column_name:Concat(Case(When(column_id=col_id, then=F('value'))))
-            for col_id, col_name in columns
-        }
-
-    def _get_values_columns(self):
+    def _get_query_values(self, column_names=None):
         # columns = Table.objects.get(name=type(self).__name__).columns.values('id','name')
         # OR
-        column_names = self._get_columns_name()
+        if column_names is None:
+            column_names = self._get_columns_name()
 
         values = {
             col_name:F(col_name)
             for col_name in column_names
         }
-        values[id]=F('primary_key') # Convert 'primary_key' to 'id'
+        values["id"]=F('primary_key') # Convert 'primary_key' to 'id'
         
         return values
 
     
+    def _dict_to_object(self, adict):
+        """
+        Convert a dictionary to a class
+        @param :adict Dictionary
+        @return :class:Struct
+        """
+        # return Struct(adict)
+        
+        res = Struct(adict)
+        res.save = types.MethodType(self.save, res) # bound save() method to the object
+        res.__class__.__name__ = self.model.__name__
+        return res
+
+
     def as_manager(cls):
         # Make sure this way of creating managers works.
         manager = DynamicDBModelManager.from_queryset(cls)()
@@ -262,15 +262,100 @@ class DynamicDBModelQuerySet(models.QuerySet):
     as_manager = classmethod(as_manager)
 
 
+class Struct(object):
+    def __init__(self, adict):
+        """
+        Convert a dictionary to a class
+        @param :adict Dictionary
+        """
+        self.__dict__.update(adict)
+        for k, v in adict.items():
+            if isinstance(v, dict):
+                self.__dict__[k] = Struct(v)
+
 
 class DynamicDBModelManager(models.Manager):
-    """
-    Base class for a model manager.
-    """
-    #: The queryset class to use.
-    queryset_class = DynamicDBModelQuerySet
 
- 
+    def create(self, defaults=None, **kwargs):
+        return DynamicDBModelQuerySet(self.model).create(defaults=defaults, **kwargs)
+
+
+    def save(self):
+        return DynamicDBModelQuerySet(self.model).save()
+
+
+    def get_queryset(self):
+    
+        table_name = convert(self.model.__name__)
+        
+        # print(table_name)
+
+        annotations = DynamicDBModelQuerySet(self.model)._get_custom_annotation(table_name)
+
+        if annotations is None:
+            return models.QuerySet(self.model).none()
+    
+        column_names = DynamicDBModelQuerySet(self.model)._get_columns_name()
+        
+        values = DynamicDBModelQuerySet(self.model)._get_query_values(column_names)
+
+        return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
+
+
+    def get(self, *args, **kwargs):
+    
+        res = self.get_queryset().get(*args, **kwargs)
+        # print(str(res))
+        if isinstance(res, dict):
+            res = DynamicDBModelQuerySet(self.model)._dict_to_object(res) # Converting to object
+            res.__class__.__name__ = self.model.__name__
+            res.save = types.MethodType(self.save, res) # bound save() method to the object
+            return res
+        else:
+            return res
+
+
+    # def get_or_create(self, defaults=None, **kwargs):
+    #    return DynamicDBModelQuerySet(self.model).get_or_create(defaults=defaults, **kwargs)
+
+    def get_or_create(self, defaults=None, **kwargs):
+        
+        lookup, params = DynamicDBModelQuerySet(self.model)._extract_model_params(defaults, **kwargs)
+        
+        try:
+            res = self.get(**lookup)
+            if isinstance(res, dict):
+                res = DynamicDBModelQuerySet(self.model)._dict_to_object(res) # Converting to object
+                res.__class__.__name__ = self.model.__name__
+                res.save = types.MethodType(DynamicDBModelQuerySet(self.model).save, res) # bound save() method
+                return res, False
+            else:
+                return res, False
+        except:
+            return DynamicDBModelQuerySet(self.model)._create_object_from_params(lookup, params)
+
+
+    def update_or_create(self, defaults=None, **kwargs):
+        defaults = defaults or {}
+        lookup, params = self._extract_model_params(defaults, **kwargs)
+        try:
+            obj = self.get_queryset().get(**lookup)
+            if isinstance(obj, dict):
+                obj = DynamicDBModelQuerySet(self.model)._dict_to_object(obj) # Converting to object
+                obj.__class__.__name__ = self.model.__name__
+                obj.save = types.MethodType(DynamicDBModelQuerySet(self.model).save, obj) # bound save() method
+            for k, v in defaults.items():
+                setattr(obj, k, v() if callable(v) else v)
+                obj.save()
+            return obj, False
+        except self.model.DoesNotExist:
+            obj, created = DynamicDBModelQuerySet(self.model)._create_object_from_params(lookup, params)
+            if created:
+                return obj, created
+
+
+
+
     """
     Generating custom initial queryset by pivoting datatable cell.
     ----
@@ -280,31 +365,83 @@ class DynamicDBModelManager(models.Manager):
     AGGREGATION(CASE WHEN column_name = 'xxx' THEN value END) AS column_name,
     FROM "Cell"
     GROUP BY id;
-    """
+    ""
     def get_queryset(self):
     
         # Generate models columns annotation
-        annotations = super(DynamicDBModelQuerySet,self)._get_custom_annotation()
+        annotations = self._get_custom_annotation()
         # Generate final models columns values
-        values = super(DynamicDBModelQuerySet,self)._get_values_columns()
+        values = self._get_query_values()
 
-        """
-        return DynamiDBModelQuerySet(self.model, using=self._db)
+        ""
+        return DynamicDBModelQuerySet(self.model, using=self._db)
             .filter(entity=type(self).__name__)  # Important!
             .values('primary_key')  # Important, # values + annotate => GROUP BY row_id
             .annotate(**annotations) # Annotate with columns_name
             .order_by() # Important
-        """
+        ""
         table_name = convert(type(self).__name__)
 
         return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
-
+    """
 
 class DynamicDBModel(models.Model):
     
     objects = DynamicDBModelManager()
-
+    # objects = DynamicDBModelQuerySet.as_manager()
+    
     class Meta:
         abstract = True
 
+    # OK
+    def save(self):
+        params = self.__dict__
+        params.pop('_state', None)
+        params = {k: v() if (callable(v) and v.__name__ != 'save') else v for k, v in params.items()}
+        self._save(**params)
+    
+
+    def _save(self, **kwargs):
+        # Check if provided kwargs is valid
+        defaults = {}
+        lookup, params = DynamicDBModelQuerySet(self)._extract_model_params(defaults, **kwargs)
+        
+        print(str(params))
+
+        table_name = convert(self.__class__.__name__)
+        
+        table_obj, table_created = Table.objects.get_or_create(name=table_name)
+        
+        obj_id = kwargs.pop('id', None)
+        
+        # Check if it is new row
+        if obj_id is None:
+            row_obj = Row.objects.create(table=table_obj)
+        else:
+            row_obj = Row.objects.get(pk=obj_id, table=table_obj)
+                
+        for attr, val in list(params.items()):
+            col_obj, col_created = Column.objects.get_or_create(table=table_obj, name=attr)
+            cell_obj = Cell.objects.update_or_create(primary_key=row_obj, value_type=col_obj, value=str(val))
+
+"""
+    def get_queryset(self):
+
+        table_name = convert(self.model.__name__)
+
+        annotations = DynamicDBModelQuerySet(self.model)._get_custom_annotation(table_name)
+        
+        if annotations is None:
+            return DynamicDBModelQuerySet(self.model).none()
+        
+        column_names = DynamicDBModelQuerySet(self.model)._get_columns_name()
+        
+        values = DynamicDBModelQuerySet(self.model)._get_query_values(column_names)
+
+        return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
+
+
+
+
+"""
 

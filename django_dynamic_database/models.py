@@ -1,9 +1,4 @@
-import re
 from django.db import models
-
-import types
-
-
 
 class Table(models.Model):
 
@@ -38,6 +33,6 @@ class Cell(models.Model):
 
     primary_key = models.ForeignKey('Row', on_delete=models.CASCADE)
     value_type = models.ForeignKey('Column', on_delete=models.CASCADE)
-    value = models.CharField(max_length=500)
+    value = models.CharField(max_length=500, null=True, blank=True)
 
 
