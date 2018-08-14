@@ -46,6 +46,9 @@ class Concat(Aggregate):
             output_field=models.CharField(),
             **extra)
 
+    def as_postgresql(self, compiler, connection):
+        # PostgreSQL method
+        return self.as_sql(compiler, connection, function='STRING_AGG', template="%(function)s(%(expressions)s, ',')")
 
 
 # From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
