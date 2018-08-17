@@ -1,7 +1,7 @@
 import re
 from itertools import chain
 from django.db import models
-from django.db.models import Aggregate, F, Case, When
+from django.db.models import Aggregate, Sum, F, Case, When
 from django.core.exceptions import ObjectDoesNotExist
 
 from .models import Table, Column, Row, Cell
@@ -146,7 +146,8 @@ class DynamicDBModelQuerySet(models.QuerySet):
                     # print(res.std_name)
                     return res
                 except ValueError:
-                    print(str(self._dict_to_object(obj[0])))
+                    # print(str(self._dict_to_object(obj[0])))
+                    pass
 
 
     # OK
@@ -416,7 +417,7 @@ class DynamicDBModel(models.Model):
         defaults = {}
         lookup, params = DynamicDBModelQuerySet(self)._extract_model_params(defaults, **kwargs)
         
-        print(str(params))
+        # print(str(params))
 
         table_name = convert(self.__class__.__name__)
         
