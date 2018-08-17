@@ -67,10 +67,10 @@ class Sum(Aggregate):
     def as_postgresql(self, compiler, connection):
         # PostgreSQL method
         template = '%(function)s(%(expressions)s)'
-        raise template
+        print(template)
         # line = re.sub('["]', '', line)
         template = template.replace('"', '')
-        raise template
+        print(template)
         return  self.as_sql(compiler, connection, template=template)
 
 
