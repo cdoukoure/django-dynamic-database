@@ -51,7 +51,18 @@ class Concat(Aggregate):
         return self.as_sql(compiler, connection, function='ARRAY_TO_STRING', template="%(function)s(ARRAY_AGG(%(expressions)s), ',')")
 
 
-class Sum(Sum):
+class Sum(Aggregate):
+    function = 'SUM'
+    name = 'Sum'
+
+    def as_oracle(self, compiler, connection):
+        if self.output_field.get_internal_type() == 'DurationField':
+            expression = self.get_source_expressions()[0]
+            from django.db.backends.oracle.functions import IntervalToSeconds, SecondsToInterval
+            return compiler.compile(
+                SecondsToInterval(Sum(IntervalToSeconds(expression)))
+            )
+        return super().as_sql(compiler, connection)
 
     def as_postgresql(self, compiler, connection):
         # PostgreSQL method
