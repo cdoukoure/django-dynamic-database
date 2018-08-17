@@ -4,7 +4,6 @@ import datetime
 from django.test import TestCase
 from django.utils import timezone
 from django.db import models
-from django.db.models import Aggregate, Sum, F, Case, When
 from django_dynamic_database.models import Table, Row, Column, Cell
 from django_dynamic_database.django_dynamic_database import DynamicDBModel, Sum
 
