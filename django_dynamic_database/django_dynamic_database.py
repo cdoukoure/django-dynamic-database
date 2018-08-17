@@ -66,7 +66,7 @@ class Sum(Aggregate):
 
     def as_postgresql(self, compiler, connection):
         # PostgreSQL method
-        return  super().as_sql(compiler, connection, template="%(function)s(expressions)")
+        return  self.as_sql(compiler, connection, template="%(function)s(expressions)")
 
 
 # From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
