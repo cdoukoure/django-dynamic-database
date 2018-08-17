@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.db import models
 from django.db.models import Aggregate, Sum, F, Case, When
 from django_dynamic_database.models import Table, Row, Column, Cell
-from django_dynamic_database.django_dynamic_database import DynamicDBModel
+from django_dynamic_database.django_dynamic_database import DynamicDBModel, Sum
 
 
 
@@ -82,7 +82,7 @@ class DynamicDBModelModelTests(TestCase):
         higher_rate = KingBook.objects.aggregate(models.Max('rate'))
         self.assertEqual(higher_rate, {'rate__max': '5'})
 
-        sum_rate = KingBook.objects.aggregate(models.Sum(models.F('rate'))) # Important! Use F to avoid bug with postgres database
+        sum_rate = KingBook.objects.aggregate(Sum('rate')) # Important! Use custom Sum function to avoid bug with postgres database
         self.assertEqual(sum_rate, {'rate__sum': 8.5})
     
     

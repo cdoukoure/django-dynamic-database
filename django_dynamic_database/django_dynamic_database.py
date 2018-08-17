@@ -51,6 +51,13 @@ class Concat(Aggregate):
         return self.as_sql(compiler, connection, function='ARRAY_TO_STRING', template="%(function)s(ARRAY_AGG(%(expressions)s), ',')")
 
 
+class Sum(Sum):
+
+    def as_postgresql(self, compiler, connection):
+        # PostgreSQL method
+        return  super().as_sql(compiler, connection, template="%(function)s(expressions)")
+
+
 # From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
 # Convert Model Name to lower_case_with_underscore
 first_cap_re = re.compile('(.)([A-Z][a-z]+)')
