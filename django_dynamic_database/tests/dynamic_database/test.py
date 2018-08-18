@@ -81,7 +81,7 @@ class DynamicDBModelModelTests(TestCase):
         higher_rate = KingBook.objects.aggregate(models.Max('rate'))
         self.assertEqual(higher_rate, {'rate__max': '5'})
 
-        sum_rate = KingBook.objects.aggregate(Sum('rate')) # Important! Use custom Sum function to avoid bug with postgres database
+        sum_rate = KingBook.objects.aggregate(models.Sum('rate')) # Important! Use custom Sum function to avoid bug with postgres database
         self.assertEqual(sum_rate, {'rate__sum': 8.5})
     
     

@@ -464,6 +464,30 @@ class DynamicDBModel(models.Model):
         return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
 
 
+language: python
+python:
+  - "2.7"
+  - "3.4"
+  - "3.5"
+  - "3.6"
+services:
+  - mysql
+  - postgresql
+env:
+  - DJANGO=1.11 DB=sqlite
+  - DJANGO=1.11 DB=mysql
+  - DJANGO=1.11 DB=postgres
+
+before_script:
+  - mysql -e 'create database dynamic_db;'
+  - psql -c 'create database dynamic_db;' -U postgres
+install:
+  - pip install pip --upgrade
+  - if [ "$DB" == "mysql" ]; then pip install mysqlclient; fi
+  - if [ "$DB" == "postgres" ]; then pip install psycopg2-binary; fi
+  - pip install -q Django==$DJANGO
+script:
+  - python runtests.py --settings=django_dynamic_database.tests.test_"$DB"_settings
 
 
 """
