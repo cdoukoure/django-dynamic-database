@@ -66,7 +66,10 @@ class Sum(Aggregate):
 
     def as_postgresql(self, compiler, connection):
         # PostgreSQL method
-        return  self.as_sql(compiler, connection, template='%(function)s(%%(expressions)s)')
+        sql, params = self.as_sql(compiler, connection, template='%(function)s(%(expressions))')
+        print(sql)
+        print(params)
+        return sql, params
 
 
 # From https://stackoverflow.com/questions/1175208/elegant-python-function-to-convert-camelcase-to-snake-case
@@ -78,9 +81,7 @@ def convert(name):
     return all_cap_re.sub(r'\1_\2', s1).lower()
 
 
-
 class DynamicDBModelQuerySet(models.QuerySet):
-
 
     ####################################
     # METHODS THAT DO DATABASE QUERIES #
