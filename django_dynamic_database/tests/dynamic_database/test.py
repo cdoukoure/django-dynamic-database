@@ -83,12 +83,12 @@ class DynamicDBModelModelTests(TestCase):
         
         # Support default value
         bk8 = KingBook.objects.get(name="Brad Pete")
-        self.assertEqual(bk8.rate, 1.0)
+        self.assertEqual(bk8.rate, '1.0')
 
         bk8.rate = 2.33
         bk8.save()
         bk8 = KingBook.objects.get(name="Brad Pete")
-        self.assertEqual(bk8.rate, 2.33)
+        self.assertEqual(bk8.rate, '2.33')
 
         # Support Aggregation
         higher_rate = KingBook.objects.aggregate(models.Max('rate'))
@@ -97,7 +97,7 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(higher_rate, {'rate__min': '1.0'})
         # SUM bugs with Postgres db
         sum_rate = KingBook.objects.aggregate(models.Sum('rate'))
-        self.assertEqual(sum_rate, {'rate__sum': 8.5})
+        self.assertEqual(sum_rate, {'rate__sum': '8.5'})
     
     
 
