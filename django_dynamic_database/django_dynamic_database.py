@@ -139,7 +139,7 @@ class DynamicDBModelQuerySet(models.QuerySet):
 
 
     def union(self, *other_qs, all=False):
-        res = self.get_queryset().union(*other_qs, all)
+        res = self.get_queryset().union(*other_qs, all=all)
         res.update = types.MethodType(self.update, res) # bound custom update() method
         res.delete = types.MethodType(self.delete, res) # bound custom delete() method
         return res
