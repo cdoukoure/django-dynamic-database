@@ -12,7 +12,6 @@
 django-dynamic-database
 =======================
 
-This package use django-pivot.
 You can write several Django models handling on 4 tables in your database.
 
 Installation
@@ -59,25 +58,16 @@ The ``models.py`` file should define the custom model type, and any fields it ha
 
 .. code:: python
 
-    from django_dynamic_database.models import DynamicDBModel, DynamicDBCharField, DynamicDBForeignKey
+    from django_dynamic_database.models import DynamicDBModel
 
 
     class Course(DynamicDBModel):
-        title = DynamicDBCharField(_("Title"), max_length=200)
+        title = models.CharField(_("Title"), max_length=200)
 
 
     class Session(DynamicDBModel):
-        course = DynamicDBForeignKey(_("Opening title"), max_length=200)
-        title = DynamicDBCharField(_("Title"), max_length=200)
-
-
-The ``admin.py`` file should define the admin, both for the child nodes and parent:
-
-.. code:: python
-
-    from django.contrib import admin
-    from django.utils.translation import ugettext_lazy as _
-    from django_dynamic_database.admin import DynamicDBModelAdmin, DynamicDBModelAdmin
+        course = models.ForeignKey(_("Opening title"), max_length=200)
+        title = models.CharField(_("Title"), max_length=200)
 
 
 Tests
