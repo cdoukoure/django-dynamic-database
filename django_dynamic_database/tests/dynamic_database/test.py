@@ -76,7 +76,7 @@ class DynamicDBModelModelTests(TestCase):
         # Support MyModel.objects.get_or_create()
         bk6, bk6_created = KingBook.objects.get_or_create(name="John Wick") # Get
         self.assertEqual(bk6.name, "John Wick")
-        bk7, bk7_created = KingBook.objects.get_or_create(name="Will Smith")  # Create
+        bk7, bk7_created = KingBook.objects.get_or_create(name="Will Smith", rate=3.5)  # Create
         self.assertEqual(bk7.id, 3)
         
         # Support MyModel.objects.count()
@@ -95,11 +95,17 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(bk9.rate, '1.0')
         self.assertEqual(bk9.weight, 'None')
 
+        all1 = KingBook.objects.all()
+        print(all1)
+
         # Support instance update
         bk9.rate = 1.33
         bk9.save()
         bk10 = KingBook.objects.get(name="Brad Pete")
         self.assertEqual(bk10.rate, '1.33')
+
+        all2 = KingBook.objects.all()
+        print(all2)
 
         # Support filter
         bk11 = KingBook.objects.filter(id__gt=2)
