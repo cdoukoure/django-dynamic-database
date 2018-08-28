@@ -24,10 +24,8 @@ First install the module, preferably in a virtual environment::
 
 Or install the current repository::
 
-    pip install -e git+https://github.com/django-polymorphic/django-polymorphic-tree.git#egg=django-dynamic-database
+    pip install -e git+https://github.com/cdoukoure/django-dynamic-database.git#egg=django-dynamic-database
 
-The main dependencies are django-pivot,
-which will be automatically installed.
 
 Configuration
 -------------
@@ -42,7 +40,6 @@ Add the following to ``settings.py``:
 .. code:: python
 
     INSTALLED_APPS += (
-        'django_pivot',
         'django_dynamic_database',
     )
 
@@ -50,7 +47,7 @@ And then
 
 .. code:: python
 
-    from django_dynamic_database.models import PivotModel
+    from django_dynamic_database.models import DynamicDBModel
 
 Usage
 -----
@@ -92,8 +89,6 @@ Todo
 
 * Relational models links (objects prefetch_related, select_related)
 * Delete data in database when models is deleted (synchronize with makemigration and migrate)
-* Complex queries with Q and F objects
-* Complex filter with __icontains, __exact, __lt, __gt, __startswith
 
 
 Contributing

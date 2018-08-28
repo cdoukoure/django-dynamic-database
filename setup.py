@@ -11,13 +11,13 @@ setup(
     author_email='c.doukoure@outlook.fr',
     license='MIT',
     classifiers=[
-        'Programming Language :: Python :: 2',
+        # 'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
+        # 'Programming Language :: Python :: 3',
+        # 'Programming Language :: Python :: 3.4',
+        # 'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6'
     ],
     packages=find_packages(),
-    install_requires=['django>=1.10', 'django-pivot>=1.6.1']
+    install_requires=['django>=1.11']
 )
