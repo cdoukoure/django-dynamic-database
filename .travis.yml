@@ -20,8 +20,7 @@ install:
   - if [ "$DB" == "postgres" ]; then pip install psycopg2-binary; fi
   - pip install -q Django==$DJANGO
   - pip install codecov
-script:
-  - python runtests.py --settings=django_dynamic_database.tests.test_"$DB"_settings
-  - coverage run tests.py
+script:@
+  - coverage run runtests.py --settings=django_dynamic_database.tests.test_"$DB"_settings
 after_success:
   - codecov
