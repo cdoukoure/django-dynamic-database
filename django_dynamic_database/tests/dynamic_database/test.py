@@ -95,8 +95,8 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(bk9.rate, '1.0')
         self.assertEqual(bk9.weight, 'None')
 
-        all1 = KingBook.objects.all()
-        print(all1)
+        # all1 = KingBook.objects.all()
+        # print(all1)
 
         # Support instance update
         bk9.rate = 1.33
@@ -104,8 +104,8 @@ class DynamicDBModelModelTests(TestCase):
         bk10 = KingBook.objects.get(name="Brad Pete")
         self.assertEqual(bk10.rate, '1.33')
 
-        all2 = KingBook.objects.all()
-        print(all2)
+        # all2 = KingBook.objects.all()
+        # print(all2)
 
         # Support filter
         bk11 = KingBook.objects.filter(id__gt=2)
