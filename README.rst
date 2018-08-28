@@ -1,13 +1,6 @@
-.. image:: https://img.shields.io/travis/django-polymorphic/django-polymorphic-tree/master.svg?branch=master
-    :target: http://travis-ci.org/django-polymorphic/django-polymorphic-tree
-.. image:: https://img.shields.io/pypi/v/django-polymorphic-tree.svg
-    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
-.. image:: https://img.shields.io/badge/wheel-yes-green.svg
-    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
-.. image:: https://img.shields.io/pypi/l/django-polymorphic-tree.svg
-    :target: https://pypi.python.org/pypi/django-polymorphic-tree/
-.. image:: https://img.shields.io/codecov/c/github/django-polymorphic/django-polymorphic-tree/master.svg
-    :target: https://codecov.io/github/django-polymorphic/django-polymorphic-tree?branch=master
+.. image:: https://travis-ci.org/cdoukoure/django-dynamic-database.svg?branch=master
+    :target: https://travis-ci.org/cdoukoure/django-dynamic-database
+
 
 django-dynamic-database
 =======================
