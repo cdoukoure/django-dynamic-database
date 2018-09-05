@@ -8,8 +8,8 @@ from django.db import models
 from django_dynamic_database.models import Table, Row, Column, Cell
 from django_dynamic_database.django_dynamic_database import DynamicDBModel, Sum
 
-# from django.contrib.auth.models import User # Required to assign User as a borrower
-from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User # Required to assign User as a borrower
+# from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
