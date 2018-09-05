@@ -39,8 +39,8 @@ class DynamicDBModelModelTests(TestCase):
         self.test_user1.is_active = True
         self.test_user2.is_active = True
         
-        test_user1.save()
-        test_user2.save()
+        self.test_user1.save()
+        self.test_user2.save()
         
         # users = User.objects.all()
         
