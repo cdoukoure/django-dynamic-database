@@ -9,6 +9,7 @@ DATABASES = {
 
 INSTALLED_APPS = (
     'django.contrib.auth',
+    'django.contrib.contenttypes',
     'django_dynamic_database',
     'django_dynamic_database.tests.dynamic_database',
 )
