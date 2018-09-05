@@ -33,7 +33,7 @@ class DynamicDBModelModelTests(TestCase):
         self.test_user1 = User.objects.create_user(username='testuser1', email='testuser1@dynamicdb.xyz')
         self.test_user2 = User.objects.create_user(username='testuser2', email='testuser2@dynamicdb.xyz')
         
-        tself.est_user1.set_password('12345')
+        self.test_user1.set_password('12345')
         self.test_user2.set_password('12345')
         
         self.test_user1.is_active = True
