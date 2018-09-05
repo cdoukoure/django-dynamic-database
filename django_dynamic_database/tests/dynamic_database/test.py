@@ -2,30 +2,84 @@ from __future__ import absolute_import
 import datetime
 
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 from django.db import models
 from django_dynamic_database.models import Table, Row, Column, Cell
 from django_dynamic_database.django_dynamic_database import DynamicDBModel, Sum
 
+# from django.contrib.auth.models import User # Required to assign User as a borrower
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class KingBook(DynamicDBModel):
+    name = models.CharField(max_length=40)
+    rate = models.FloatField(max_length=20, default=1.0)
+    weight = models.FloatField(max_length=20, null=True, blank=True)
 
 
 class DynamicDBModelModelTests(TestCase):
 
-    def test_create_model_instance(self):
-        t = Table.objects.create(name="testTable")
-        self.assertEqual(t.name, "testTable")
+    def setUp(self):
+        # Every test needs a client.
+        # self.client = Client()
+        
+        # Create two users
+        test_user1 = User.objects.create_user(username='testuser1', email='testuser1@dynamicdb.xyz')
+        test_user2 = User.objects.create_user(username='testuser2', email='testuser2@dynamicdb.xyz')
+        
+        test_user1.set_password('12345')
+        test_user2.set_password('12345')
+        
+        test_user1.is_active = True
+        
+        test_user1.save()
+        test_user2.save()
+        
+        # users = User.objects.all()
+        
+        # for us in users:
+        #     print(us)
+        
+        cells = []
+        
+        # Create tables
+        tables = []
+        tables.append(Table.objects.create(name="testTable_1"))
+        tables.append(Table.objects.create(name="testTable_2"))
+
+        for t in tables:
+            # Create tables columns
+            cols = []
+            for i in range(1,5):
+                cols.append(Column(table=t, name="col_" + str(i)))
+            Column.objects.bulk_create(cols)
+
+            # Create 30 BookInstance objects
+            number_of_rows = 30
+            for row in range(number_of_rows):
+                r = Row.objects.create(table=t)
+                for col in t.columns.all():
+                    cells.append(Cell(primary_key=r, value_type=col, value="value " + str(col.id)))
+        Cell.objects.bulk_create(cells)
+
+    """
+    # def test_create_model_instance(self):
+    #     t = Table.objects.create(name="testTable")
+    #     self.assertEqual(t.name, "testTable")
     
     
     def test_create_table_columns_rows_cells_instance(self):
     
-        t = Table.objects.create(name="test_table_2")
+        t = Table.objects.create(name="testTable_2")
         
         cols = []
         for i in range(1,5):
             cols.append(Column(table=t, name="col_" + str(i)))
         Column.objects.bulk_create(cols)
 
-        t = Table.objects.get(name="test_table_2")
+        t = Table.objects.get(name="testTable_2")
         
         r = Row.objects.create(table=t)
         
@@ -36,22 +90,16 @@ class DynamicDBModelModelTests(TestCase):
 
         self.assertEqual(len(cols), len(cells))
         
-        cols = Column.objects.all()
+        # cols = Column.objects.all()
         
         # print(str(cols.__dict__))
         
         # queryset_methods = [method_name for method_name in dir(cols) if callable(getattr(cols, method_name))]
         
         # print(str(queryset_methods))
-    
+    """
     
     def test_create_dynamic_db_model_instance(self):
-        
-        class KingBook(DynamicDBModel):
-            name = models.CharField(max_length=40)
-            rate = models.FloatField(max_length=20, default=1.0)
-            weight = models.FloatField(max_length=20, null=True, blank=True)
-        
         
         # Support MyModel.objects.none()
         empt = KingBook.objects.all()
@@ -107,9 +155,10 @@ class DynamicDBModelModelTests(TestCase):
         # all2 = KingBook.objects.all()
         # print(all2)
 
-        # Support filter
+        # Support complex filter
         bk11 = KingBook.objects.filter(id__gt=2)
         self.assertEqual(len(bk11), 2)
+        
         
         # Support Aggregation
         higher_rate = KingBook.objects.aggregate(models.Max('rate'))
@@ -118,8 +167,8 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(lower_rate, {'rate__min': '1.33'})
         
         # SUM bugs with Postgres db
-        # sum_rate = KingBook.objects.aggregate(models.Sum('rate'))
-        # self.assertEqual(sum_rate, {'rate__sum': 9.83})
+        sum_rate = KingBook.objects.aggregate(models.Sum('rate'))
+        self.assertEqual(sum_rate, {'rate__sum': 13.33})
         
         # Support delete()
         bk12 = KingBook.objects.create(name="Tony Stark2", rate=3.5)
@@ -139,6 +188,65 @@ class DynamicDBModelModelTests(TestCase):
         bk20 = KingBook.objects.filter(id__lt=7).update(rate=1.5)
         bk12 = KingBook.objects.get(name="Tony Stark2")
         self.assertEqual(bk12.rate, '1.5')
+
+
+    def test_logged_in_uses_correct_template(self):
+
+        # users = User.objects.all()
+        # for us in users:
+        #     print(us)
+        
+        login = self.client.login(username='testuser1@dynamicdb.xyz', password='12345')
+        print(login)
+        url_table_list = reverse('django_dynamic_database:tables')
+        response = self.client.get(url_table_list)
+        
+        # print(response.__dict__)
+
+        # Check our user is logged in
+        self.assertEqual(str(response.context['user']), 'testuser1')
+        # Check that we got a response "success"
+        self.assertEqual(response.status_code, 200)
+
+    """
+    def test_views(self):
+        ""
+        The detail view of a question with a pub_date in the future
+        returns a 404 not found.
+        ""
+        login = self.client.login(username='testuser1', password='1X<ISRUkw+tuK')
+        
+        print(login)
+
+        t = Table.objects.get(name="testTable_1")
+        
+        url_table_list = reverse('django_dynamic_database:tables')
+        response = self.client.get(url_table_list)
+        # print(response.content)
+        self.assertEqual(response.status_code, 200)
+
+        url_table_details = reverse('django_dynamic_database:table-details', args=(t.id,))
+        response = self.client.get(url_table_details)
+        # print(response.content)
+        self.assertEqual(response.status_code, 200)
+        
+
+        url_table_table_rows = reverse('django_dynamic_database:table-rows', args=(t.id,))
+        response = self.client.get(url_table_table_rows)
+        # print(response.content)
+        self.assertEqual(response.status_code, 200)
+        
+        # self.client.login(username='c.doukoure@outlook.fr', password='pianniste')
+        
+        response = self.client.post(url_table_table_rows, {}) # blank data dictionary
+        print(response.content)
+        self.assertEqual(response.status_code, 200)
+        ""
+        url_table_row_details = reverse('django_dynamic_database:table-row-details', args=(t3.id, r.id,))
+        response = self.client.get(url_table_row_details)
+        print(response.content)
+        self.assertEqual(response.status_code, 200)
+    """
 
 
     
