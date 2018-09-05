@@ -188,7 +188,7 @@ class DynamicDBModelModelTests(TestCase):
         # Support update()
         bk20 = KingBook.objects.filter(id__lt=63).update(rate=1.5)
         bk12 = KingBook.objects.get(name="Tony Stark2")
-        self.assertEqual(bk12.rate, '1.5')
+        self.assertEqual(bk12.id, '1.5')
 
 
     def test_login(self):
