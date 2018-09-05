@@ -225,18 +225,18 @@ class DynamicDBModelModelTests(TestCase):
 
         t = Table.objects.get(name="testTable_1")
         
-        url_table_list = reverse('django_dynamic_database:tables')
+        url_table_list = reverse('tables')
         response = self.client.get(url_table_list)
         # print(response.content)
         self.assertEqual(response.status_code, 200)
 
-        url_table_details = reverse('django_dynamic_database:table-details', args=(t.id,))
+        url_table_details = reverse('table-details', args=(t.id,))
         response = self.client.get(url_table_details)
         # print(response.content)
         self.assertEqual(response.status_code, 200)
         
 
-        url_table_table_rows = reverse('django_dynamic_database:table-rows', args=(t.id,))
+        url_table_table_rows = reverse('table-rows', args=(t.id,))
         response = self.client.get(url_table_table_rows)
         # print(response.content)
         self.assertEqual(response.status_code, 200)
