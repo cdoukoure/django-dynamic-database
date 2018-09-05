@@ -2,7 +2,7 @@ from django.conf.urls import url
 
 from .views import TableList, TableDetail, TableRowList, TableRowDetail
 
-# app_name = 'django_dynamic_database'
+app_name = 'django_dynamic_database'
 
 urlpatterns = [
     url(
