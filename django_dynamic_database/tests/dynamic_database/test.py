@@ -139,7 +139,7 @@ class DynamicDBModelModelTests(TestCase):
         
         
         # Support default value
-        bk9 = KingBook.objects.get(id=4)
+        bk9 = KingBook.objects.get(id=64)
         self.assertEqual(bk9.name, "Brad Pete")
         self.assertEqual(bk9.rate, '1.0')
         self.assertEqual(bk9.weight, 'None')
@@ -157,7 +157,7 @@ class DynamicDBModelModelTests(TestCase):
         # print(all2)
 
         # Support complex filter
-        bk11 = KingBook.objects.filter(id__gt=2)
+        bk11 = KingBook.objects.filter(id__gt=62)
         self.assertEqual(len(bk11), 2)
         
         
