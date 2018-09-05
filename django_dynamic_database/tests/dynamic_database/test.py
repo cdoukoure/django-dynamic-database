@@ -126,7 +126,7 @@ class DynamicDBModelModelTests(TestCase):
         bk6, bk6_created = KingBook.objects.get_or_create(name="John Wick") # Get
         self.assertEqual(bk6.name, "John Wick")
         bk7, bk7_created = KingBook.objects.get_or_create(name="Will Smith", rate=3.5)  # Create
-        self.assertEqual(bk7.id, 3)
+        self.assertEqual(bk7.id, 63)
         
         # Support MyModel.objects.count()
         all = KingBook.objects.all()
