@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 import datetime
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.db import models
@@ -19,21 +19,25 @@ class KingBook(DynamicDBModel):
     weight = models.FloatField(max_length=20, null=True, blank=True)
 
 
+@override_settings(ROOT_URLCONF='django_dynamic_database.urls')
 class DynamicDBModelModelTests(TestCase):
 
     def setUp(self):
+        # Every test needs access to the request factory.
+        self.factory = RequestFactory()
+        
         # Every test needs a client.
         self.client = Client()
         
         # Create two users
-        test_user1 = User.objects.create_user(username='testuser1', email='testuser1@dynamicdb.xyz')
-        test_user2 = User.objects.create_user(username='testuser2', email='testuser2@dynamicdb.xyz')
+        self.test_user1 = User.objects.create_user(username='testuser1', email='testuser1@dynamicdb.xyz')
+        self.test_user2 = User.objects.create_user(username='testuser2', email='testuser2@dynamicdb.xyz')
         
-        test_user1.set_password('12345')
-        test_user2.set_password('12345')
+        tself.est_user1.set_password('12345')
+        self.test_user2.set_password('12345')
         
-        test_user1.is_active = True
-        test_user2.is_active = True
+        self.test_user1.is_active = True
+        self.test_user2.is_active = True
         
         test_user1.save()
         test_user2.save()
@@ -194,8 +198,22 @@ class DynamicDBModelModelTests(TestCase):
     def test_login(self):
         login = self.client.login(username='testuser1', password='12345')
         self.assertTrue(login)
+    
+    """
+    def test_details(self):
+        # Create an instance of a GET request.
+        request = self.factory.get('/customer/details')
 
+        # Recall that middleware are not supported. You can simulate a
+        # logged-in user by setting request.user manually.
+        request.user = self.testuser1
 
+        # Test my_view() as if it were deployed at /customer/details
+        response = tables_view(request)
+        self.assertEqual(response.status_code, 200)
+
+    """
+    
     def test_views(self):
         """
         The detail view of a question with a pub_date in the future
