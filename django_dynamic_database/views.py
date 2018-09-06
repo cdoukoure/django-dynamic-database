@@ -58,7 +58,8 @@ class TableDetail(APIView):
 
 
 class TableRowList(APIView):
-    
+
+
     def get_queryset(self, table_name):
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name)
         if annotations is None:
@@ -66,14 +67,16 @@ class TableRowList(APIView):
         column_names = [k for k in annotations]
         values = DynamicDBModelQuerySet(self)._get_query_values(column_names)
         return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
-        
-     def get_serializer_class(self, table_name):
+    
+    """
+    def get_serializer_class(self, table_name):
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name)
         if annotations is None:
             qs = models.QuerySet(self.model).none()
-        # TableRowSerializer.Meta.model = self.kwargs.get('model')
-        # TableRowSerializer.Meta.fields = [k for k in annotations]
+        TableRowSerializer.Meta.model = self.kwargs.get('model')
+        TableRowSerializer.Meta.fields = [k for k in annotations]
         return TableRowSerializer
+    """
     
     def get(self, request, table_id):
         # table_id = request.data['id']
