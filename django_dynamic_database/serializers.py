@@ -1,4 +1,5 @@
 import itertools
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 from rest_framework.fields import empty
 from rest_framework.exceptions import ErrorDetail, ValidationError
@@ -84,8 +85,8 @@ class TableRowSerializer(serializers.ModelSerializer):
         """
         Check that the start is before the stop.
         """
-        data_id = data['table_id']
-        del data['table_id']
+        data_id = data.pop('table_id')
+        # del data['table_id']
         table_obj = Table.objects.get(pk=data_id)
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
         column_names = [k for k in annotations]
