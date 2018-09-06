@@ -22,11 +22,14 @@ class ColumnSerializer(serializers.ModelSerializer):
 
 class TableRowSerializer(serializers.ModelSerializer):
     
+    class Meta:
+        model = None
+
     # def __call__(self, value):
     #     if value % self.base != 0:
     #         message = 'This field must be a multiple of %d.' % self.base
     #         raise serializers.ValidationError(message)
-
+    
     def validate(self, data):
         """
         Check that the start is before the stop.

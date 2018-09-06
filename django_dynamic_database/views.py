@@ -59,7 +59,7 @@ class TableDetail(APIView):
 
 class TableRowList(APIView):
     
-    def get_rows(self, table_name):
+    def get_queryset(self, table_name):
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name)
         if annotations is None:
             qs = models.QuerySet(self.model).none()
@@ -67,20 +67,33 @@ class TableRowList(APIView):
         values = DynamicDBModelQuerySet(self)._get_query_values(column_names)
         return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
         
+     def get_serializer_class(self, table_name):
+        annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name)
+        if annotations is None:
+            qs = models.QuerySet(self.model).none()
+        # TableRowSerializer.Meta.model = self.kwargs.get('model')
+        # TableRowSerializer.Meta.fields = [k for k in annotations]
+        return TableRowSerializer
+    
     def get(self, request, table_id):
         # table_id = request.data['id']
         table = Table.objects.get(pk=table_id)
-        qset = self.get_rows(table.name)
+        qset = self.get_queryset(table.name)
         qs = [ obj for obj in qset ]
         return HttpResponse(json.dumps({"data": qs}), content_type='application/json')
 
 
-    def post(self, request, table_id):
-        serializer = TableRowSerializer(data=request.data)
-        if serializer.is_valid():
+    def post(self, request):
+        # serializer_class = self.get_serializer_class(table.name)
+        # table = Table.objects.get(pk=table_id)
+        # if serializer.is_valid():
+        try:
+            serializer = TableRowSerializer(data=request.data)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return HttpResponse(json.dumps({"data": serializer.data}), content_type='application/json', status=status.HTTP_201_CREATED)
+        except:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 
 # NOK
