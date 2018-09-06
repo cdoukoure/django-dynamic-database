@@ -90,6 +90,7 @@ class TableRowList(APIView):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
+        raising = None
         try:
             serializer = TableRowSerializer(data=request.data)
             raising = serializer.save()
