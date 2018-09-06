@@ -102,7 +102,7 @@ class TableRowList(APIView):
             # return Response(serializer.data, status=status.HTTP_201_CREATED)
             return HttpResponse(json.dumps({"data": serializer.data}), content_type='application/json', status=status.HTTP_201_CREATED)
         except:
-            return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 
 # NOK
