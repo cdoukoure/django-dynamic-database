@@ -85,13 +85,15 @@ class TableRowSerializer(serializers.ModelSerializer):
         """
         Check that the start is before the stop.
         """
-        data_id = data.pop('table_id')
+        datas = data.copy()
+        print(datas)
+        data_id = datas.pop('table_id')
         # del data['table_id']
         table_obj = Table.objects.get(pk=data_id)
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
         column_names = [k for k in annotations]
 
-        for attr, v in data:
+        for attr, v in datas:
             if attr != 'id' and attr not in column_names:
                 raise serializers.ValidationError("finish must occur after start")
         return data
