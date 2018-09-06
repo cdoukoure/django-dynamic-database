@@ -152,8 +152,8 @@ class TableRowList(APIView):
                 obj = self.create(request.data, table_obj)
                 # return Response(serializer.data, status=status.HTTP_201_CREATED)
                 return HttpResponse(json.dumps({"data": obj}), content_type='application/json', status=status.HTTP_201_CREATED)
-        except:
-            return Response(["Error system"], status=status.HTTP_400_BAD_REQUEST)
+        except e:
+            return Response(e, status=status.HTTP_400_BAD_REQUEST)
         
 
 # NOK
