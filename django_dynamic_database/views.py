@@ -80,7 +80,7 @@ class TableRowList(APIView):
             if row_obj is not None:
                 annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
                 
-                column_names = [k for k in annotations]
+                column_names = [str(k):str(k) for k in annotations]
                 
                 defaults = column_names
                 
@@ -141,7 +141,7 @@ class TableRowList(APIView):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
-        print(request.__dict__)
+        print(request.data)
         try:
             table_obj = Table.objects.get(pk=table_id)
             row_id = request.data.get('id', None)
