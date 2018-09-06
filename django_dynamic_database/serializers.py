@@ -1,6 +1,6 @@
 import itertools
 from rest_framework import serializers
-
+from rest_framework.fields import empty
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
 
@@ -79,7 +79,7 @@ class TableRowSerializer(serializers.ModelSerializer):
 
         return value
 
-    
+
     def validate(self, data):
         """
         Check that the start is before the stop.
