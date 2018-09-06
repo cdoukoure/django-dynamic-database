@@ -141,6 +141,7 @@ class TableRowList(APIView):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
+        print(request.data)
         try:
             table_obj = Table.objects.get(pk=table_id)
             row_id = request.data.get('id', None)
