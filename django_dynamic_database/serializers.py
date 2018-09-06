@@ -66,7 +66,7 @@ class TableRowSerializer(serializers.ModelSerializer):
         if is_empty_value:
             return data
 
-        value = self.to_internal_value(data) # [{},{}]
+        # value = self.to_internal_value(data) # [{},{}]
         print(' to_internal_value ')
         print(value)
         print(' to_internal_value ')
