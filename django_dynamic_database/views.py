@@ -148,7 +148,7 @@ class TableRowList(APIView):
                 obj = self.update(request.data, table_obj)
                 return HttpResponse(json.dumps({"data": obj}), content_type='application/json')
             else:
-                 obj = self.create(request.data, table_obj)
+                obj = self.create(request.data, table_obj)
                 # return Response(serializer.data, status=status.HTTP_201_CREATED)
                 return HttpResponse(json.dumps({"data": obj}), content_type='application/json', status=status.HTTP_201_CREATED)
         except:
