@@ -68,16 +68,67 @@ class TableRowList(APIView):
         values = DynamicDBModelQuerySet(self)._get_query_values(column_names)
         return Cell.objects.filter(primary_key__table__name=table_name).values('primary_key').annotate(**annotations).values(**values).order_by()
     
-    """
-    def get_serializer_class(self, table_name):
-        annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name)
-        if annotations is None:
-            qs = models.QuerySet(self.model).none()
-        TableRowSerializer.Meta.model = self.kwargs.get('model')
-        TableRowSerializer.Meta.fields = [k for k in annotations]
-        return TableRowSerializer
-    """
-    
+    def create(self, validated_data, table_obj):
+        # validated_data = {table_id:value, others rows fields}
+        defaults = None
+        objs = []
+        
+        if table_obj:
+            # Create row to initialize pk
+            row_obj = Row.objects.create(table=table_obj)
+            
+            if row_obj is not None:
+                annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
+                
+                column_names = [k for k in annotations]
+                
+                defaults = column_names
+                
+                for attr, val in list(validated_data.items()):
+                    defaults.pop(attr)
+                    col_obj = Column.objects.get(table=table_obj, name=attr)
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=str(val)))
+                
+                for attr in defaults:
+                    col_obj = Column.objects.get(table=table_obj, name=attr)
+                    objs.append(Cell(primary_key=row_obj, value_type=col_obj, value=null))
+                
+                Cell.objects.bulk_create(objs)
+                
+                # Initialize annotations and values to return query_set from pivot
+                values = DynamicDBModelQuerySet(self)._get_query_values(column_names)
+                
+            try:
+                obj = Cell.objects.values('primary_key').annotate(**annotations).filter(primary_key=row_obj).values(**values).order_by()
+                # Converting value_query_set to object
+                # res = DynamicDBModelQuerySet(self)._dict_to_object(obj[0])
+                return obj
+            except ValueError:
+                # raise("Please check yours fields values")
+                raise serializers.ValidationError('Please check yours fields values.')
+
+    def update(self, validated_data, table_obj):
+        
+        row_id = validated_data.pop('id')
+            
+        # table_obj = Table.objects.get(pk=table_id)
+        
+        # for field in validated_data:
+        #    instance.__setattr__(field, validated_data.get(field))
+        
+        for attr, val in validated_data.items():
+            Cell.objects.filter(primary_key__id=row_id, value_type=Column.objects.get(table=table_obj, name=attr)).update(value=val)
+            
+        try:
+            obj = Cell.objects.values('primary_key').annotate(**annotations).filter(primary_key=row_obj).values(**values).order_by()
+            # Converting value_query_set to object
+            # res = DynamicDBModelQuerySet(self)._dict_to_object(obj[0])
+            return obj
+        except ValueError:
+            # raise("Please check yours fields values")
+            raise serializers.ValidationError('Please check yours fields values.')
+
+
     def get(self, request, table_id):
         # table_id = request.data['id']
         table = Table.objects.get(pk=table_id)
@@ -90,19 +141,18 @@ class TableRowList(APIView):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
-        print(request.data)
-        raising = None
         try:
             table_obj = Table.objects.get(pk=table_id)
-            annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
-            TableRowSerializer.Meta.fields = (k for k in annotations)
-            serializer = TableRowSerializer(data=request.data)
-            if serializer.is_valid():
-                raising = serializer.save()
-            # return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return HttpResponse(json.dumps({"data": serializer.data}), content_type='application/json', status=status.HTTP_201_CREATED)
+            row_id = request.data.get('id', None)
+            if row_id is not None:
+                obj = self.update(request.data, table_obj)
+                return HttpResponse(json.dumps({"data": obj}), content_type='application/json')
+            else:
+                 obj = self.create(request.data, table_obj)
+                # return Response(serializer.data, status=status.HTTP_201_CREATED)
+                return HttpResponse(json.dumps({"data": obj}), content_type='application/json', status=status.HTTP_201_CREATED)
         except:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(["Error system"], status=status.HTTP_400_BAD_REQUEST)
         
 
 # NOK
