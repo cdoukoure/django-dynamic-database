@@ -93,6 +93,9 @@ class TableRowList(APIView):
         print(request.data)
         raising = None
         try:
+            table_obj = Table.objects.get(pk=table_id)
+            annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
+            TableRowSerializer.Meta.fields = (k for k in annotations)
             serializer = TableRowSerializer(data=request.data)
             raising = serializer.save()
             # return Response(serializer.data, status=status.HTTP_201_CREATED)

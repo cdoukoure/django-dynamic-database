@@ -1,6 +1,9 @@
 import itertools
 from rest_framework import serializers
 
+from rest_framework.exceptions import ErrorDetail, ValidationError
+
+
 from .django_dynamic_database import convert, DynamicDBModelQuerySet
 from .models import Table, Column, Row, Cell
 
@@ -30,6 +33,53 @@ class TableRowSerializer(serializers.ModelSerializer):
     #         message = 'This field must be a multiple of %d.' % self.base
     #         raise serializers.ValidationError(message)
     
+    def is_valid(self, raise_exception=False):
+        # This implementation is the same as the default,
+        # except that we use lists, rather than dicts, as the empty case.
+        assert hasattr(self, 'initial_data'), (
+            'Cannot call `.is_valid()` as no `data=` keyword argument was '
+            'passed when instantiating the serializer instance.'
+        )
+
+        if not hasattr(self, '_validated_data'):
+            try:
+                self._validated_data = self.run_validation(self.initial_data)
+            except ValidationError as exc:
+                self._validated_data = []
+                self._errors = exc.detail
+            else:
+                self._errors = []
+
+        if self._errors and raise_exception:
+            raise ValidationError(self.errors)
+
+        return not bool(self._errors)
+
+
+    def run_validation(self, data=empty):
+        """
+        We override the default `run_validation`, because the validation
+        performed by validators and the `.validate()` method should
+        be coerced into an error dictionary with a 'non_fields_error' key.
+        """
+        (is_empty_value, data) = self.validate_empty_values(data)
+        if is_empty_value:
+            return data
+
+        value = self.to_internal_value(data) # [{},{}]
+        print(' to_internal_value ')
+        print(value)
+        print(' to_internal_value ')
+        try:
+            # self.run_validators(value)
+            value = self.validate(value)
+            assert value is not None, '.validate() should return the validated data'
+        except (ValidationError, DjangoValidationError) as exc:
+            raise ValidationError(detail=as_serializer_error(exc))
+
+        return value
+
+    
     def validate(self, data):
         """
         Check that the start is before the stop.
@@ -38,7 +88,7 @@ class TableRowSerializer(serializers.ModelSerializer):
         del data['table_id']
         table_obj = Table.objects.get(pk=data_id)
         annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
-        column_names = [k for k, v in annotations]
+        column_names = [k for k in annotations]
 
         for attr, v in data:
             if attr != 'id' and attr not in column_names:
