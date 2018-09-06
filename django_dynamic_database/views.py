@@ -152,9 +152,10 @@ class TableRowList(APIView):
             if row_id is not None:
                 return Response(e, status=status.HTTP_400_BAD_REQUEST)
             else:
-                obj = self.create(request.data, table_obj)
+                qs = self.create(request.data, table_obj)
+                
                 # return Response(serializer.data, status=status.HTTP_201_CREATED)
-                return HttpResponse(json.dumps({"data": obj}), content_type='application/json', status=status.HTTP_201_CREATED)
+                return HttpResponse(json.dumps({"data": [qs[0]]}), content_type='application/json', status=status.HTTP_201_CREATED)
         except ValueError as e:
             return Response(e, status=status.HTTP_400_BAD_REQUEST)
         
