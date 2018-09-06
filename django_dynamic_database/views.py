@@ -84,6 +84,8 @@ class TableRowList(APIView):
                 
                 defaults = {str(k):str(k) for k in annotations}
                 
+                print(defaults)
+                
                 for attr, val in list(validated_data.items()):
                     defaults.pop(attr)
                     col_obj = Column.objects.get(table=table_obj, name=attr)
