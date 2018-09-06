@@ -221,7 +221,7 @@ class DynamicDBModelModelTests(TestCase):
         """
         login = self.client.login(username='testuser1', password='12345')
         
-        print(login)
+        self.assertTrue(login)
 
         t = Table.objects.get(name="testTable_1")
         

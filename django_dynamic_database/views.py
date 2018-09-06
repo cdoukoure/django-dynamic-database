@@ -86,7 +86,7 @@ class TableRowList(APIView):
         return HttpResponse(json.dumps({"data": qs}), content_type='application/json')
 
 
-    def post(self, request):
+    def post(self, request, table_id):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
