@@ -97,7 +97,8 @@ class TableRowList(APIView):
             annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
             TableRowSerializer.Meta.fields = (k for k in annotations)
             serializer = TableRowSerializer(data=request.data)
-            raising = serializer.save()
+            if serializer.is_valid():
+                raising = serializer.save()
             # return Response(serializer.data, status=status.HTTP_201_CREATED)
             return HttpResponse(json.dumps({"data": serializer.data}), content_type='application/json', status=status.HTTP_201_CREATED)
         except:
