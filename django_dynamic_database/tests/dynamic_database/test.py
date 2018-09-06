@@ -244,7 +244,7 @@ class DynamicDBModelModelTests(TestCase):
         # self.client.login(username='c.doukoure@outlook.fr', password='pianniste')
         
         response = self.client.post(url_table_table_rows, {'col_1':'test col_1', 'col_2':'test col_2', 'col_3':'test col_3', 'col_4':'test col_4', 'col_5':'test col_5'}) # blank data dictionary
-        print(response.content)
+        # print(response.content)
         self.assertEqual(response.status_code, 200)
         """
         url_table_row_details = reverse('django_dynamic_database:table-row-details', args=(t3.id, r.id,))

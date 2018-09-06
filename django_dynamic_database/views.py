@@ -141,13 +141,12 @@ class TableRowList(APIView):
         # serializer_class = self.get_serializer_class(table.name)
         # table = Table.objects.get(pk=table_id)
         # if serializer.is_valid():
-        print(request.data)
+        print(request.__dict__)
         try:
             table_obj = Table.objects.get(pk=table_id)
             row_id = request.data.get('id', None)
             if row_id is not None:
-                obj = self.update(request.data, table_obj)
-                return HttpResponse(json.dumps({"data": obj}), content_type='application/json')
+                return Response(e, status=status.HTTP_400_BAD_REQUEST)
             else:
                 obj = self.create(request.data, table_obj)
                 # return Response(serializer.data, status=status.HTTP_201_CREATED)
