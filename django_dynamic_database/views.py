@@ -82,7 +82,9 @@ class TableRowList(APIView):
                 
                 column_names = [str(k) for k in annotations]
                 
-                defaults = {str(k):str(k) for k in annotations}
+                print(column_names)
+                
+                defaults = {str(k):str(k) for k in column_names}
                 
                 print(defaults)
                 
