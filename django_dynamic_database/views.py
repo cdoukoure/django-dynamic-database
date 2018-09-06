@@ -80,9 +80,9 @@ class TableRowList(APIView):
             if row_obj is not None:
                 annotations = DynamicDBModelQuerySet(self)._get_custom_annotation(table_name=table_obj.name)
                 
-                column_names = [str(k)=str(k) for k in annotations]
+                column_names = [str(k) for k in annotations]
                 
-                defaults = [str(k)=str(k) for k in annotations]
+                defaults = {str(k):str(k) for k in annotations}
                 
                 for attr, val in list(validated_data.items()):
                     defaults.pop(attr)
