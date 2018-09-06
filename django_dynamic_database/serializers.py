@@ -68,11 +68,11 @@ class TableRowSerializer(serializers.ModelSerializer):
 
         # value = self.to_internal_value(data) # [{},{}]
         print(' to_internal_value ')
-        print(value)
+        # print(value)
         print(' to_internal_value ')
         try:
             # self.run_validators(value)
-            value = self.validate(value)
+            value = self.validate(data)
             assert value is not None, '.validate() should return the validated data'
         except (ValidationError, DjangoValidationError) as exc:
             raise ValidationError(detail=as_serializer_error(exc))
