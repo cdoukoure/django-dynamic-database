@@ -172,7 +172,7 @@ class DynamicDBModelModelTests(TestCase):
         response = self.client.post(url_table_table_rows, {'col_1':'test col_1', 'col_2':'test col_2', 'col_3':'test col_3', 'col_4':'test col_4'}) # blank data dictionary
         self.assertEqual(response.status_code, 201)
         
-        url_table_row_details = reverse('table-row-details', args=(t.id, r.id,))
+        url_table_row_details = reverse('table-row-details', args=(t.id, 3,))
         response = self.client.get(url_table_row_details)
         self.assertEqual(response.status_code, 204)
 
