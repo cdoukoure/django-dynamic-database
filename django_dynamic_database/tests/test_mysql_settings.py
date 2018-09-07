@@ -8,6 +8,12 @@ DATABASES = {
 }
 
 INSTALLED_APPS = (
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'rest_framework',
     'django_dynamic_database',
     'django_dynamic_database.tests.dynamic_database',
 )
