@@ -10,11 +10,7 @@ You can write several Django models handling on 4 tables in your database.
 Installation
 ============
 
-First install the module, preferably in a virtual environment::
-
-    pip install django-dynamic-database
-
-Or install the current repository::
+First install the module, preferably in a virtual environment from the repository::
 
     pip install -e git+https://github.com/cdoukoure/django-dynamic-database.git#egg=django-dynamic-database
 
@@ -32,6 +28,7 @@ Add the following to ``settings.py``:
 .. code:: python
 
     INSTALLED_APPS += (
+        'djangorestframework', # According to your needs
         'django_dynamic_database',
     )
 
@@ -47,11 +44,12 @@ Usage
 The main feature of this module is creating a tree of custom node types.
 It boils down to creating a application with 2 files:
 
+- With Models
 The ``models.py`` file should define the custom model type, and any fields it has:
 
 .. code:: python
 
-    from django_dynamic_database.models import DynamicDBModel
+    from django_dynamic_database.django_dynamic_database import DynamicDBModel
 
 
     class Course(DynamicDBModel):
@@ -62,6 +60,8 @@ The ``models.py`` file should define the custom model type, and any fields it ha
         course = models.ForeignKey(_("Opening title"), max_length=200)
         title = models.CharField(_("Title"), max_length=200)
 
+- With views
+Check the test file 
 
 Tests
 -----
@@ -72,6 +72,7 @@ Todo
 
 * Relational models links (objects prefetch_related, select_related)
 * Delete data in database when models is deleted (synchronize with makemigration and migrate)
+* Fields validations
 
 
 Contributing
