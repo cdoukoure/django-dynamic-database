@@ -6,12 +6,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.db import models
 from django_dynamic_database.models import Table, Row, Column, Cell
-from django_dynamic_database.django_dynamic_database import DynamicDBModel, Sum
+from django_dynamic_database.django_dynamic_database import DynamicDBModel
 
 from django.contrib.auth.models import User
-# from django.contrib.auth import get_user_model
-
-# User = get_user_model()
 
 class KingBook(DynamicDBModel):
     name = models.CharField(max_length=40)
@@ -42,11 +39,6 @@ class DynamicDBModelModelTests(TestCase):
         self.test_user1.save()
         self.test_user2.save()
         
-        # users = User.objects.all()
-        
-        # for us in users:
-        #     print(us)
-        
         cells = []
         
         # Create tables
@@ -69,41 +61,7 @@ class DynamicDBModelModelTests(TestCase):
                     cells.append(Cell(primary_key=r, value_type=col, value="value " + str(col.id)))
         Cell.objects.bulk_create(cells)
 
-    """
-    # def test_create_model_instance(self):
-    #     t = Table.objects.create(name="testTable")
-    #     self.assertEqual(t.name, "testTable")
-    
-    
-    def test_create_table_columns_rows_cells_instance(self):
-    
-        t = Table.objects.create(name="testTable_2")
-        
-        cols = []
-        for i in range(1,5):
-            cols.append(Column(table=t, name="col_" + str(i)))
-        Column.objects.bulk_create(cols)
 
-        t = Table.objects.get(name="testTable_2")
-        
-        r = Row.objects.create(table=t)
-        
-        cells = []
-        for col in t.columns.all():
-            cells.append(Cell(primary_key=r, value_type=col, value="value " + str(col.id)))
-        Cell.objects.bulk_create(cells)
-
-        self.assertEqual(len(cols), len(cells))
-        
-        # cols = Column.objects.all()
-        
-        # print(str(cols.__dict__))
-        
-        # queryset_methods = [method_name for method_name in dir(cols) if callable(getattr(cols, method_name))]
-        
-        # print(str(queryset_methods))
-    """
-    
     def test_create_dynamic_db_model_instance(self):
         
         # Support MyModel.objects.none()
@@ -115,8 +73,6 @@ class DynamicDBModelModelTests(TestCase):
         
         bk2 = KingBook.objects.create(name="John Wick", rate=5)
         
-        # Not yet support default value
-        # bk3 = KingBook.objects.create(name="Jet Lee")
         
         self.assertEqual(bk1.__class__.__name__, "KingBook")
         self.assertEqual(bk2.name, "John Wick")
@@ -148,17 +104,11 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(bk9.rate, '1.0')
         self.assertEqual(bk9.weight, 'None')
 
-        # all1 = KingBook.objects.all()
-        # print(all1)
-
         # Support instance update
         bk9.rate = 1.33
         bk9.save()
         bk10 = KingBook.objects.get(name="Brad Pete")
         self.assertEqual(bk10.rate, '1.33')
-
-        # all2 = KingBook.objects.all()
-        # print(all2)
 
         # Support complex filter
         bk11 = KingBook.objects.filter(id__gt=62)
@@ -195,25 +145,6 @@ class DynamicDBModelModelTests(TestCase):
         self.assertEqual(bk12.rate, '1.5')
 
 
-    def test_login(self):
-        login = self.client.login(username='testuser1', password='12345')
-        self.assertTrue(login)
-    
-    """
-    def test_details(self):
-        # Create an instance of a GET request.
-        request = self.factory.get('/customer/details')
-
-        # Recall that middleware are not supported. You can simulate a
-        # logged-in user by setting request.user manually.
-        request.user = self.testuser1
-
-        # Test my_view() as if it were deployed at /customer/details
-        response = tables_view(request)
-        self.assertEqual(response.status_code, 200)
-
-    """
-    
     def test_views(self):
         """
         The detail view of a question with a pub_date in the future
@@ -227,31 +158,25 @@ class DynamicDBModelModelTests(TestCase):
         
         url_table_list = reverse('tables')
         response = self.client.get(url_table_list)
-        # print(response.content)
         self.assertEqual(response.status_code, 200)
 
         url_table_details = reverse('table-details', args=(t.id,))
         response = self.client.get(url_table_details)
-        # print(response.content)
         self.assertEqual(response.status_code, 200)
         
 
         url_table_table_rows = reverse('table-rows', args=(t.id,))
         response = self.client.get(url_table_table_rows)
-        # print(response.content)
         self.assertEqual(response.status_code, 200)
-        
-        # self.client.login(username='c.doukoure@outlook.fr', password='pianniste')
         
         response = self.client.post(url_table_table_rows, {'col_1':'test col_1', 'col_2':'test col_2', 'col_3':'test col_3', 'col_4':'test col_4'}) # blank data dictionary
-        # print(response.content)
-        self.assertEqual(response.status_code, 200)
-        """
-        url_table_row_details = reverse('django_dynamic_database:table-row-details', args=(t3.id, r.id,))
+        self.assertEqual(response.status_code, 201)
+        
+        url_table_row_details = reverse('table-row-details', args=(t3.id, r.id,))
         response = self.client.get(url_table_row_details)
         print(response.content)
-        self.assertEqual(response.status_code, 200)
-        """
+        self.assertEqual(response.status_code, 204)
+
 
 
     

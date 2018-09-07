@@ -1,6 +1,6 @@
 from django.conf.urls import url
 
-from .views import TableList, TableDetail, TableRowList, TableRowDetail
+from .views import TableList, TableDetail, EntityList, EntityDetail
 
 app_name = 'django_dynamic_database'
 
@@ -17,12 +17,12 @@ urlpatterns = [
     ),
     url(
         r'^tables/(?P<table_id>\d+)/views/$',
-        TableRowList.as_view(),
+        EntityList.as_view(),
         name='table-rows'
     ),
     url(
         r'^tables/(?P<table_id>\d+)/views/(?P<pk>\d+)/$',
-        TableRowDetail.as_view(),
+        EntityDetail.as_view(),
         name='table-row-details'
     ),
 ]
